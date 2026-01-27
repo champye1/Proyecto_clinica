@@ -15,3 +15,4 @@ function LoadingSpinner({ size = 'md', className = '' }) {
 }
 
 export default memo(LoadingSpinner)
+  
