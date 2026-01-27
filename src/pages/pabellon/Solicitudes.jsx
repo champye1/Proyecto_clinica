@@ -1,0 +1,1429 @@
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
+import { supabase } from '../../config/supabase'
+import { CheckCircle2, XCircle, Clock, Eye, Calendar, X, User, Stethoscope, Package, FileText, CheckCircle, Activity, Filter, Lock, Search } from 'lucide-react'
+import { format } from 'date-fns'
+import { codigosOperaciones } from '../../data/codigosOperaciones'
+import { useNotifications } from '../../hooks/useNotifications'
+import { useDebounce } from '../../hooks/useDebounce'
+import { useTheme } from '../../contexts/ThemeContext'
+import { sanitizeString } from '../../utils/sanitizeInput'
+import { logger } from '../../utils/logger'
+import Button from '../../components/common/Button'
+import EmptyState from '../../components/common/EmptyState'
+import { TableSkeleton } from '../../components/common/Skeleton'
+import Modal from '../../components/common/Modal'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
+import { motion } from 'framer-motion'
+
+export default function Solicitudes() {
+  const { theme } = useTheme()
+  const navigate = useNavigate()
+  const { showSuccess, showError } = useNotifications()
+  const [filtroEstado, setFiltroEstado] = useState('todas')
+  const [busqueda, setBusqueda] = useState('')
+  const [filtroDoctor, setFiltroDoctor] = useState('todos')
+  const [filtroCodigoOperacion, setFiltroCodigoOperacion] = useState('todos')
+  const debouncedBusqueda = useDebounce(busqueda, 300)
+  const [solicitudProgramando, setSolicitudProgramando] = useState(null)
+  const [solicitudDetalle, setSolicitudDetalle] = useState(null)
+  
+  // Verificar si hay un slot seleccionado desde el calendario
+  useEffect(() => {
+    try {
+      const slotStr = sessionStorage.getItem('slot_seleccionado')
+      const solicitudStr = sessionStorage.getItem('solicitud_gestionando')
+      
+      if (slotStr && solicitudStr) {
+        const slot = JSON.parse(slotStr)
+        const solicitud = JSON.parse(solicitudStr)
+        
+        // Configurar el modal con la información del slot
+        setSolicitudProgramando(solicitud)
+        setFormProgramacion({
+          fecha: format(new Date(slot.date), 'yyyy-MM-dd'),
+          hora_inicio: slot.time,
+          hora_fin: '',
+          operating_room_id: slot.pabellonId,
+          observaciones: '',
+        })
+        
+        // Limpiar sessionStorage
+        sessionStorage.removeItem('slot_seleccionado')
+      }
+    } catch (e) {
+      logger.errorWithContext('Error al procesar slot seleccionado', e)
+    }
+  }, [])
+  const [formProgramacion, setFormProgramacion] = useState({
+    fecha: '',
+    hora_inicio: '',
+    hora_fin: '',
+    operating_room_id: '',
+    observaciones: '',
+  })
+  const queryClient = useQueryClient()
+
+  const { data: solicitudes = [], isLoading } = useQuery({
+    queryKey: ['solicitudes', filtroEstado],
+    queryFn: async () => {
+      let query = supabase
+        .from('surgery_requests')
+        .select(`
+          *,
+          doctors:doctor_id(id, nombre, apellido, especialidad, estado),
+          patients:patient_id(nombre, apellido, rut),
+          surgery_request_supplies(
+            cantidad,
+            supplies:supply_id(nombre, codigo, grupo_prestacion)
+          )
+        `)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+
+      if (filtroEstado !== 'todas') {
+        query = query.eq('estado', filtroEstado)
+      }
+
+      const { data, error } = await query
+      if (error) throw error
+      return data
+    },
+  })
+
+  // Obtener lista única de doctores para filtro
+  const doctoresUnicos = useMemo(() => {
+    const doctoresMap = new Map()
+    solicitudes.forEach(s => {
+      if (s.doctors && !doctoresMap.has(s.doctors.id)) {
+        doctoresMap.set(s.doctors.id, s.doctors)
+      }
+    })
+    return Array.from(doctoresMap.values())
+  }, [solicitudes])
+
+  // Obtener lista única de códigos de operación para filtro
+  const codigosUnicos = useMemo(() => {
+    const codigosSet = new Set()
+    solicitudes.forEach(s => {
+      if (s.codigo_operacion) {
+        codigosSet.add(s.codigo_operacion)
+      }
+    })
+    return Array.from(codigosSet).sort()
+  }, [solicitudes])
+
+  // Filtrar solicitudes según búsqueda y filtros
+  const solicitudesFiltradas = useMemo(() => {
+    return solicitudes.filter(s => {
+      // Filtro por estado
+      if (filtroEstado !== 'todas' && s.estado !== filtroEstado) {
+        return false
+      }
+
+      // Filtro por doctor
+      if (filtroDoctor !== 'todos' && s.doctors?.id !== filtroDoctor) {
+        return false
+      }
+
+      // Filtro por código de operación
+      if (filtroCodigoOperacion !== 'todos' && s.codigo_operacion !== filtroCodigoOperacion) {
+        return false
+      }
+
+      // Búsqueda por texto (usando debounced value)
+      if (debouncedBusqueda.trim()) {
+        const busquedaLower = debouncedBusqueda.toLowerCase()
+        const nombrePaciente = `${s.patients?.nombre || ''} ${s.patients?.apellido || ''}`.toLowerCase()
+        const rutPaciente = (s.patients?.rut || '').toLowerCase()
+        const nombreDoctor = `${s.doctors?.nombre || ''} ${s.doctors?.apellido || ''}`.toLowerCase()
+        const codigoOperacion = (s.codigo_operacion || '').toLowerCase()
+        
+        if (
+          !nombrePaciente.includes(busquedaLower) &&
+          !rutPaciente.includes(busquedaLower) &&
+          !nombreDoctor.includes(busquedaLower) &&
+          !codigoOperacion.includes(busquedaLower)
+        ) {
+          return false
+        }
+      }
+
+      return true
+    })
+  }, [solicitudes, filtroEstado, filtroDoctor, filtroCodigoOperacion, debouncedBusqueda])
+
+  const aceptarSolicitud = useMutation({
+    mutationFn: async (id) => {
+      const { error } = await supabase
+        .from('surgery_requests')
+        .update({ estado: 'aceptada', updated_at: new Date().toISOString() })
+        .eq('id', id)
+      
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['solicitudes'])
+      queryClient.invalidateQueries(['solicitudes-pendientes'])
+      showSuccess('Solicitud aceptada exitosamente')
+    },
+    onError: (error) => {
+      const errorMessage = error.message || error.toString() || 'Error desconocido'
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+        showError('Error de conexión. Verifique su conexión a internet e intente nuevamente.')
+      } else {
+        showError('Error al aceptar la solicitud: ' + errorMessage)
+      }
+    },
+  })
+
+  const [showConfirmRechazar, setShowConfirmRechazar] = useState(false)
+  const [solicitudARechazar, setSolicitudARechazar] = useState(null)
+
+  const rechazarSolicitud = useMutation({
+    mutationFn: async (id) => {
+      const { error } = await supabase
+        .from('surgery_requests')
+        .update({ estado: 'rechazada', updated_at: new Date().toISOString() })
+        .eq('id', id)
+      
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['solicitudes'])
+      showSuccess('Solicitud rechazada')
+      setShowConfirmRechazar(false)
+      setSolicitudARechazar(null)
+    },
+    onError: (error) => {
+      const errorMessage = error.message || error.toString() || 'Error desconocido'
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+        showError('Error de conexión. Verifique su conexión a internet e intente nuevamente.')
+      } else {
+        showError('Error al rechazar la solicitud: ' + errorMessage)
+      }
+    },
+  })
+
+  const handleRechazarClick = (solicitud) => {
+    setSolicitudARechazar(solicitud)
+    setShowConfirmRechazar(true)
+  }
+
+  const confirmarRechazar = () => {
+    if (solicitudARechazar) {
+      rechazarSolicitud.mutate(solicitudARechazar.id)
+    }
+  }
+
+  const { data: pabellones = [] } = useQuery({
+    queryKey: ['pabellones'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('operating_rooms')
+        .select('id, nombre')
+        .eq('activo', true)
+        .is('deleted_at', null)
+        .order('nombre')
+      
+      if (error) throw error
+      return data
+    },
+  })
+
+  // Consultar todas las cirugías para la fecha seleccionada (para mostrar el calendario completo)
+  const { data: cirugiasFecha = [] } = useQuery({
+    queryKey: ['cirugias-fecha', formProgramacion.fecha],
+    queryFn: async () => {
+      if (!formProgramacion.fecha) return []
+
+      const { data, error } = await supabase
+        .from('surgeries')
+        .select(`
+          id,
+          operating_room_id,
+          hora_inicio,
+          hora_fin,
+          doctors:doctor_id(nombre, apellido)
+        `)
+        .eq('fecha', formProgramacion.fecha)
+        .is('deleted_at', null)
+        .in('estado', ['programada', 'en_proceso'])
+      
+      if (error) throw error
+      return data || []
+    },
+    enabled: !!formProgramacion.fecha,
+  })
+
+  // Consultar bloqueos para la fecha seleccionada
+  const { data: bloqueosFecha = [] } = useQuery({
+    queryKey: ['bloqueos-fecha', formProgramacion.fecha],
+    queryFn: async () => {
+      if (!formProgramacion.fecha) return []
+
+      let query = supabase
+        .from('schedule_blocks')
+        .select('id, operating_room_id, hora_inicio, hora_fin, vigencia_hasta')
+        .eq('fecha', formProgramacion.fecha)
+        .is('deleted_at', null)
+      
+      const { data, error } = await query
+      
+      if (error) throw error
+      
+      // Filtrar bloqueos que están vigentes (vigencia_hasta es null o >= fecha seleccionada)
+      return (data || []).filter(bloqueo => 
+        !bloqueo.vigencia_hasta || bloqueo.vigencia_hasta >= formProgramacion.fecha
+      )
+    },
+    enabled: !!formProgramacion.fecha,
+  })
+
+  // Generar slots de horas (08:00 a 19:00)
+  const slotsHorarios = useMemo(() => {
+    const hours = []
+    for (let i = 8; i < 20; i++) {
+      hours.push(`${i.toString().padStart(2, '0')}:00`)
+    }
+    return hours
+  }, [])
+
+  // Obtener solo los primeros 4 pabellones (siempre mostrar 4)
+  const pabellonesMostrar = useMemo(() => {
+    const primeros4 = pabellones.slice(0, 4)
+    return primeros4
+  }, [pabellones])
+
+  // Función para obtener el estado de un slot
+  const getSlotStatus = (pabellonId, time) => {
+    if (!formProgramacion.fecha) return { status: 'available' }
+
+    // Verificar si hay cirugía en este slot
+    const cirugia = cirugiasFecha.find(c => 
+      c.operating_room_id === pabellonId &&
+      c.hora_inicio <= time + ':00' && 
+      c.hora_fin > time + ':00'
+    )
+    
+    if (cirugia) return { status: 'occupied', data: cirugia }
+    
+    // Verificar si hay bloqueo en este slot
+    const bloqueo = bloqueosFecha.find(b => 
+      b.operating_room_id === pabellonId &&
+      b.hora_inicio <= time + ':00' && 
+      b.hora_fin > time + ':00'
+    )
+    
+    if (bloqueo) return { status: 'blocked', data: bloqueo }
+    
+    return { status: 'available' }
+  }
+
+  const programarCirugia = useMutation({
+    mutationFn: async ({ solicitudId, formData }) => {
+      // Asegurar formato correcto de horas (HH:MM:SS)
+      const horaInicio = formData.hora_inicio.includes(':') && formData.hora_inicio.length === 5 
+        ? `${formData.hora_inicio}:00` 
+        : formData.hora_inicio
+      const horaFin = formData.hora_fin.includes(':') && formData.hora_fin.length === 5 
+        ? `${formData.hora_fin}:00` 
+        : formData.hora_fin
+
+      // Usar función PostgreSQL atómica que garantiza transacción completa
+      // Esta función crea la cirugía, copia insumos y actualiza la solicitud en una sola transacción
+      const { data, error } = await supabase.rpc('programar_cirugia_completa', {
+        p_surgery_request_id: solicitudId,
+        p_operating_room_id: formData.operating_room_id,
+        p_fecha: formData.fecha,
+        p_hora_inicio: horaInicio,
+        p_hora_fin: horaFin,
+        p_observaciones: formData.observaciones || null
+      })
+
+      if (error) {
+        logger.errorWithContext('Error al programar cirugía desde Solicitudes', error)
+        throw error
+      }
+
+      if (!data || !data.success) {
+        throw new Error(data?.message || 'Error desconocido al programar la cirugía')
+      }
+
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['solicitudes'])
+      queryClient.invalidateQueries(['solicitudes-pendientes'])
+      queryClient.invalidateQueries(['cirugias-hoy'])
+      queryClient.invalidateQueries(['cirugias-calendario'])
+      setSolicitudProgramando(null)
+      setFormProgramacion({
+        fecha: '',
+        hora_inicio: '',
+        hora_fin: '',
+        operating_room_id: '',
+        observaciones: '',
+      })
+      // Limpiar sessionStorage
+      sessionStorage.removeItem('solicitud_gestionando')
+      sessionStorage.removeItem('slot_seleccionado')
+    },
+    onError: (error) => {
+      logger.errorWithContext('Error al programar cirugía (onError)', error)
+      let mensaje = 'Error al programar la cirugía'
+      
+      const errorMessage = error.message || error.toString() || 'Error desconocido'
+      
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+        mensaje = 'Error de conexión. Verifique su conexión a internet e intente nuevamente.'
+      } else if (errorMessage.includes('solapamiento') || errorMessage.includes('overlap')) {
+        mensaje = 'Ya existe una cirugía programada en este horario. Por favor, seleccione otro horario.'
+      } else if (errorMessage.includes('hora de fin')) {
+        mensaje = errorMessage
+      } else if (errorMessage.includes('doctor debe estar activo')) {
+        mensaje = 'El doctor debe estar activo para programar cirugías'
+      } else if (errorMessage.includes('bloqueado') || errorMessage.includes('blocked')) {
+        mensaje = 'El horario seleccionado está bloqueado por convenio'
+      } else if (errorMessage.includes('fecha pasada')) {
+        mensaje = 'No se puede agendar una cirugía en una fecha pasada'
+      } else {
+        mensaje = errorMessage
+      }
+      
+      showError(mensaje)
+    },
+  })
+
+  const handleAceptarYProgramar = (solicitud) => {
+    // Guardar la solicitud en sessionStorage para que el calendario la pueda recuperar
+    sessionStorage.setItem('solicitud_gestionando', JSON.stringify(solicitud))
+    // Navegar al calendario
+    navigate('/pabellon/calendario')
+  }
+
+  const handleProgramar = (e) => {
+    e.preventDefault()
+    if (solicitudProgramando) {
+      // Validar que hora_fin > hora_inicio
+      if (formProgramacion.hora_inicio && formProgramacion.hora_fin) {
+        const [horaInicioH, horaInicioM] = formProgramacion.hora_inicio.split(':').map(Number)
+        const [horaFinH, horaFinM] = formProgramacion.hora_fin.split(':').map(Number)
+        const minutosInicio = horaInicioH * 60 + horaInicioM
+        const minutosFin = horaFinH * 60 + horaFinM
+        
+        if (minutosFin <= minutosInicio) {
+          showError('La hora de fin debe ser mayor que la hora de inicio')
+          return
+        }
+      }
+      
+      programarCirugia.mutate({
+        solicitudId: solicitudProgramando.id,
+        formData: formProgramacion,
+      })
+    }
+  }
+
+  const getEstadoBadge = (estado) => {
+    const estados = {
+      pendiente: 'bg-yellow-100 text-yellow-800',
+      aceptada: 'bg-green-100 text-green-800',
+      rechazada: 'bg-red-100 text-red-800',
+      cancelada: 'bg-gray-100 text-gray-800',
+    }
+    return estados[estado] || estados.pendiente
+  }
+
+  if (isLoading) {
+    return <div className="text-center py-8">Cargando solicitudes...</div>
+  }
+
+  // Función para obtener el color del círculo según la prioridad o estado
+  const getPriorityColor = (solicitud) => {
+    // Si hay campo prioridad, usarlo
+    if (solicitud.prioridad === 'alta' || solicitud.prioridad === 'Alta') {
+      return 'bg-red-500'
+    }
+    // Si no hay prioridad, usar rojo para pendientes urgentes o azul para otros
+    if (solicitud.estado === 'pendiente' && solicitud.urgencia === 'alta') {
+      return 'bg-red-500'
+    }
+    return 'bg-blue-500'
+  }
+
+  // Función para obtener el badge de prioridad
+  const getPriorityBadge = (solicitud) => {
+    // Si hay campo prioridad, usarlo
+    if (solicitud.prioridad === 'alta' || solicitud.prioridad === 'Alta') {
+      return { text: 'PRIORIDAD ALTA', bg: 'bg-red-500', textColor: 'text-white' }
+    }
+    // Si no hay prioridad, determinar por estado o urgencia
+    if (solicitud.estado === 'pendiente' && solicitud.urgencia === 'alta') {
+      return { text: 'PRIORIDAD ALTA', bg: 'bg-red-500', textColor: 'text-white' }
+    }
+    return { text: 'PRIORIDAD MEDIA', bg: 'bg-blue-500', textColor: 'text-white' }
+  }
+
+  // Obtener inicial del paciente
+  const getInitial = (nombre) => {
+    return nombre?.charAt(0).toUpperCase() || '?'
+  }
+
+  // Obtener nombre del procedimiento desde código
+  const getProcedureName = (codigo) => {
+    const codigoObj = codigosOperaciones.find(c => c.codigo === codigo)
+    return codigoObj?.nombre || codigo
+  }
+
+
+  return (
+    <div className="animate-in fade-in slide-in-from-right duration-500 max-w-5xl mx-auto px-4 sm:px-6 lg:px-0">
+      {/* Header centrado */}
+      <div className="mb-6 sm:mb-8 lg:mb-10 text-center">
+        <h2 className={`text-xl sm:text-2xl lg:text-3xl font-black tracking-tighter uppercase mb-2 ${
+          theme === 'dark' ? 'text-white' : 'text-slate-900'
+        }`}>
+          BANDEJA DE SOLICITUDES
+        </h2>
+        <p className={`text-[10px] sm:text-xs font-bold uppercase tracking-widest ${
+          theme === 'dark' ? 'text-slate-400' : 'text-slate-400'
+        }`}>
+          MÉDICOS PENDIENTES DE AGENDAMIENTO
+        </p>
+      </div>
+
+      {/* Búsqueda y Filtros Avanzados */}
+      <div className="mb-6 sm:mb-8 space-y-3 sm:space-y-4">
+        {/* Campo de Búsqueda */}
+        <div className="relative">
+          <Search className={`absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 ${
+            theme === 'dark' ? 'text-slate-400' : 'text-slate-400'
+          }`} />
+          <input
+            type="text"
+            value={busqueda}
+            onChange={(e) => setBusqueda(sanitizeString(e.target.value))}
+            placeholder="Buscar por paciente, RUT, doctor o código..."
+            className={`w-full pl-10 sm:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 border-2 rounded-xl sm:rounded-2xl focus:border-blue-500 focus:outline-none font-bold text-sm sm:text-base transition-all touch-manipulation ${
+              theme === 'dark'
+                ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400'
+                : theme === 'medical'
+                ? 'bg-white border-blue-200 text-slate-700 placeholder-slate-400'
+                : 'bg-white border-slate-200 text-slate-700 placeholder-slate-400'
+            }`}
+          />
+        </div>
+
+        {/* Filtros Múltiples */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          <div>
+            <label className={`text-[10px] sm:text-xs font-black uppercase tracking-widest mb-1.5 sm:mb-2 block ${
+              theme === 'dark' ? 'text-slate-400' : 'text-slate-400'
+            }`}>
+              Filtro por Doctor
+            </label>
+            <select
+              value={filtroDoctor}
+              onChange={(e) => setFiltroDoctor(e.target.value)}
+              className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 border-2 rounded-lg sm:rounded-xl focus:border-blue-500 focus:outline-none font-bold text-sm sm:text-base touch-manipulation ${
+                theme === 'dark'
+                  ? 'bg-slate-800 border-slate-700 text-white'
+                  : theme === 'medical'
+                  ? 'bg-white border-blue-200 text-slate-700'
+                  : 'bg-white border-slate-200 text-slate-700'
+              }`}
+            >
+              <option value="todos">Todos los doctores</option>
+              {doctoresUnicos.map(doctor => (
+                <option key={doctor.id} value={doctor.id}>
+                  Dr. {doctor.nombre} {doctor.apellido}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className={`text-[10px] sm:text-xs font-black uppercase tracking-widest mb-1.5 sm:mb-2 block ${
+              theme === 'dark' ? 'text-slate-400' : 'text-slate-400'
+            }`}>
+              Filtro por Código de Operación
+            </label>
+            <select
+              value={filtroCodigoOperacion}
+              onChange={(e) => setFiltroCodigoOperacion(e.target.value)}
+              className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 border-2 rounded-lg sm:rounded-xl focus:border-blue-500 focus:outline-none font-bold text-sm sm:text-base touch-manipulation ${
+                theme === 'dark'
+                  ? 'bg-slate-800 border-slate-700 text-white'
+                  : theme === 'medical'
+                  ? 'bg-white border-blue-200 text-slate-700'
+                  : 'bg-white border-slate-200 text-slate-700'
+              }`}
+            >
+              <option value="todos">Todos los códigos</option>
+              {codigosUnicos.map(codigo => {
+                const codigoObj = codigosOperaciones.find(c => c.codigo === codigo)
+                return (
+                  <option key={codigo} value={codigo}>
+                    {codigo} - {codigoObj?.nombre || codigo}
+                  </option>
+                )
+              })}
+            </select>
+          </div>
+
+          <div>
+            <label className={`text-[10px] sm:text-xs font-black uppercase tracking-widest mb-1.5 sm:mb-2 block ${
+              theme === 'dark' ? 'text-slate-400' : 'text-slate-400'
+            }`}>
+              Filtro por Estado
+            </label>
+            <select
+              value={filtroEstado}
+              onChange={(e) => setFiltroEstado(e.target.value)}
+              className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 border-2 rounded-lg sm:rounded-xl focus:border-blue-500 focus:outline-none font-bold text-sm sm:text-base touch-manipulation ${
+                theme === 'dark'
+                  ? 'bg-slate-800 border-slate-700 text-white'
+                  : theme === 'medical'
+                  ? 'bg-white border-blue-200 text-slate-700'
+                  : 'bg-white border-slate-200 text-slate-700'
+              }`}
+            >
+              <option value="todas">Todos los estados</option>
+              <option value="pendiente">Pendientes</option>
+              <option value="aceptada">Aceptadas</option>
+              <option value="rechazada">Rechazadas</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Contador de resultados */}
+        {busqueda || filtroDoctor !== 'todos' || filtroCodigoOperacion !== 'todos' || filtroEstado !== 'todas' ? (
+          <div className={`text-xs sm:text-sm font-bold ${
+            theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
+          }`}>
+            Mostrando {solicitudesFiltradas.length} de {solicitudes.length} solicitudes
+          </div>
+        ) : null}
+      </div>
+
+      {/* Filtros con chips animados */}
+      <div className="mb-6 sm:mb-8 flex flex-wrap justify-center gap-2 sm:gap-3">
+        {[
+          { value: 'todas', label: 'Todas', count: solicitudes.length },
+          { value: 'pendiente', label: 'Pendientes', count: solicitudes.filter(s => s.estado === 'pendiente').length },
+          { value: 'aceptada', label: 'Aceptadas', count: solicitudes.filter(s => s.estado === 'aceptada').length },
+        ].map((filtro) => (
+          <motion.button
+            key={filtro.value}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setFiltroEstado(filtro.value)}
+            className={`
+              px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-widest
+              transition-all flex items-center gap-1.5 sm:gap-2 touch-manipulation active:scale-95
+              ${filtroEstado === filtro.value
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-blue-300'
+              }
+            `}
+          >
+            <span>{filtro.label}</span>
+            <span className={`
+              px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px]
+              ${filtroEstado === filtro.value
+                ? 'bg-white/20 text-white'
+                : 'bg-slate-100 text-slate-600'
+              }
+            `}>
+              {filtro.count}
+            </span>
+          </motion.button>
+        ))}
+      </div>
+
+      {/* Tarjetas de solicitudes */}
+      <div className="grid gap-4 sm:gap-6">
+        {isLoading ? (
+          <TableSkeleton rows={5} />
+        ) : solicitudesFiltradas.length === 0 ? (
+          <EmptyState
+            icon={FileText}
+            title="No hay solicitudes"
+            description={filtroEstado === 'todas' 
+              ? "No se encontraron solicitudes en el sistema"
+              : `No hay solicitudes con estado "${filtroEstado}"`
+            }
+          />
+        ) : (
+          solicitudesFiltradas.map((solicitud) => {
+              const initial = getInitial(solicitud.patients?.nombre)
+              const priorityColor = getPriorityColor(solicitud)
+              const priorityBadge = getPriorityBadge(solicitud)
+              const procedureName = getProcedureName(solicitud.codigo_operacion)
+              
+              return (
+                <div
+                  key={solicitud.id}
+                  className={`rounded-2xl sm:rounded-[2rem] border shadow-sm p-4 sm:p-6 lg:p-8 flex flex-col sm:flex-row items-center justify-between hover:shadow-xl transition-all ${
+                    theme === 'dark'
+                      ? 'bg-slate-800 border-slate-700'
+                      : theme === 'medical'
+                      ? 'bg-white border-blue-100'
+                      : 'bg-white border-slate-100'
+                  }`}
+                >
+                  {/* Lado izquierdo: Círculo con inicial */}
+                  <div className={`w-12 h-12 sm:w-14 sm:h-14 ${priorityColor} rounded-full flex items-center justify-center font-black text-base sm:text-lg text-white shadow-inner mb-3 sm:mb-0 flex-shrink-0`}>
+                    {initial}
+                  </div>
+
+                  {/* Centro: Información del paciente */}
+                  <div className="flex-1 mx-0 sm:mx-4 lg:mx-6 mb-3 sm:mb-0 min-w-0 w-full sm:w-auto text-center sm:text-left">
+                    <div className="flex flex-col sm:flex-row items-center sm:items-center gap-2 sm:gap-3 mb-2">
+                      <h4 className={`text-lg sm:text-xl font-black tracking-tight truncate w-full sm:w-auto ${
+                        theme === 'dark' ? 'text-white' : 'text-slate-800'
+                      }`}>
+                        {solicitud.patients?.nombre} {solicitud.patients?.apellido}
+                      </h4>
+                      <span className={`px-2 py-0.5 rounded-lg text-[8px] sm:text-[9px] font-black uppercase tracking-widest ${priorityBadge.bg} ${priorityBadge.textColor} flex-shrink-0`}>
+                        {priorityBadge.text}
+                      </span>
+                    </div>
+                    <div className={`text-[10px] sm:text-xs font-bold mt-1 uppercase tracking-widest break-words sm:break-normal ${
+                      theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+                    }`}>
+                      {procedureName} • <span className={theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}>Dr. {solicitud.doctors?.apellido || solicitud.doctors?.nombre} {solicitud.doctors?.apellido}</span>
+                    </div>
+                  </div>
+
+                  {/* Lado derecho: Botones */}
+                  <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-center sm:justify-end">
+                    {/* Botón Ver Detalles */}
+                    <button
+                      onClick={() => setSolicitudDetalle(solicitud)}
+                      className={`p-2.5 sm:p-3 rounded-lg sm:rounded-xl transition-all border touch-manipulation active:scale-95 ${
+                        theme === 'dark'
+                          ? 'text-blue-400 hover:bg-blue-900/30 border-blue-800 hover:border-blue-600'
+                          : theme === 'medical'
+                          ? 'text-blue-600 hover:bg-blue-50 border-blue-100 hover:border-blue-300'
+                          : 'text-blue-600 hover:bg-blue-50 border-blue-100 hover:border-blue-300'
+                      }`}
+                      title="Ver detalles"
+                    >
+                      <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
+                    </button>
+                    
+                    {/* Botón Gestionar Cupo */}
+                    {solicitud.estado === 'pendiente' && (
+                      <button
+                        onClick={() => handleAceptarYProgramar(solicitud)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 lg:px-8 py-2.5 sm:py-3 lg:py-3.5 rounded-lg sm:rounded-xl font-black text-[9px] sm:text-[10px] uppercase tracking-[0.15em] shadow-lg active:scale-95 transition-all touch-manipulation flex-1 sm:flex-initial"
+                      >
+                        GESTIONAR CUPO
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })
+        )}
+      </div>
+
+      {/* Modal de Detalles */}
+      {solicitudDetalle && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className={`rounded-[2rem] p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar ${
+            theme === 'dark'
+              ? 'bg-slate-800'
+              : theme === 'medical'
+              ? 'bg-white'
+              : 'bg-white'
+          }`}>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className={`text-2xl font-black uppercase tracking-tight ${
+                theme === 'dark' ? 'text-white' : 'text-slate-900'
+              }`}>Detalles de la Solicitud</h2>
+              <button
+                onClick={() => setSolicitudDetalle(null)}
+                className={`p-2 rounded-xl transition-colors ${
+                  theme === 'dark'
+                    ? 'hover:bg-slate-700'
+                    : 'hover:bg-slate-100'
+                }`}
+              >
+                <X className={`w-5 h-5 ${
+                  theme === 'dark' ? 'text-slate-300' : 'text-slate-600'
+                }`} />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Información del Paciente */}
+              <div className={`rounded-2xl p-6 border ${
+                theme === 'dark'
+                  ? 'bg-slate-700/50 border-slate-600'
+                  : theme === 'medical'
+                  ? 'bg-blue-50 border-blue-100'
+                  : 'bg-slate-50 border-slate-100'
+              }`}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                    theme === 'dark' ? 'bg-blue-900/50' : 'bg-blue-100'
+                  }`}>
+                    <User className={`w-5 h-5 ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`} />
+                  </div>
+                  <h3 className={`text-lg font-black uppercase tracking-tight ${
+                    theme === 'dark' ? 'text-white' : 'text-slate-900'
+                  }`}>Información del Paciente</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className={`text-xs font-black uppercase tracking-wider mb-1 ${
+                      theme === 'dark' ? 'text-slate-400' : 'text-slate-400'
+                    }`}>Nombre Completo</p>
+                    <p className={`text-sm font-bold ${
+                      theme === 'dark' ? 'text-white' : 'text-slate-700'
+                    }`}>
+                      {solicitudDetalle.patients?.nombre} {solicitudDetalle.patients?.apellido}
+                    </p>
+                  </div>
+                  <div>
+                    <p className={`text-xs font-black uppercase tracking-wider mb-1 ${
+                      theme === 'dark' ? 'text-slate-400' : 'text-slate-400'
+                    }`}>RUT</p>
+                    <p className={`text-sm font-bold ${
+                      theme === 'dark' ? 'text-white' : 'text-slate-700'
+                    }`}>{solicitudDetalle.patients?.rut}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Información del Doctor */}
+              <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
+                    <Stethoscope className="w-5 h-5 text-green-600" />
+                  </div>
+                  <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Información del Doctor</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1">Nombre Completo</p>
+                    <p className="text-sm font-bold text-slate-700">
+                      {solicitudDetalle.doctors?.nombre} {solicitudDetalle.doctors?.apellido}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1">Especialidad</p>
+                    <p className="text-sm font-bold text-slate-700 capitalize">
+                      {solicitudDetalle.doctors?.especialidad?.replace('_', ' ')}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1">Estado</p>
+                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
+                      solicitudDetalle.doctors?.estado === 'activo' 
+                        ? 'bg-green-100 text-green-700' 
+                        : 'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {solicitudDetalle.doctors?.estado}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Información de la Operación */}
+              <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
+                    <FileText className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Información de la Operación</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1">Código de Operación</p>
+                    <p className="text-sm font-bold text-slate-700">{solicitudDetalle.codigo_operacion}</p>
+                    {(() => {
+                      const operacion = codigosOperaciones.find(op => op.codigo === solicitudDetalle.codigo_operacion)
+                      return operacion ? (
+                        <div className="mt-2">
+                          <p className="text-xs font-bold text-slate-600">{operacion.nombre}</p>
+                          {operacion.descripcion && (
+                            <p className="text-xs text-slate-500 mt-1">{operacion.descripcion}</p>
+                          )}
+                        </div>
+                      ) : null
+                    })()}
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1">Hora Recomendada</p>
+                    <p className="text-sm font-bold text-slate-700">
+                      {solicitudDetalle.hora_recomendada || 'No especificada'}
+                    </p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1">Estado</p>
+                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${getEstadoBadge(solicitudDetalle.estado)}`}>
+                      {solicitudDetalle.estado}
+                    </span>
+                  </div>
+                  {solicitudDetalle.observaciones && (
+                    <div className="col-span-2">
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1">Observaciones</p>
+                      <p className="text-sm text-slate-700 bg-white p-3 rounded-xl border border-slate-200">
+                        {solicitudDetalle.observaciones}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Insumos Requeridos */}
+              {solicitudDetalle.surgery_request_supplies && solicitudDetalle.surgery_request_supplies.length > 0 && (
+                <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
+                      <Package className="w-5 h-5 text-orange-600" />
+                    </div>
+                    <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Insumos Requeridos</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {solicitudDetalle.surgery_request_supplies.map((item, idx) => (
+                      <div key={idx} className="bg-white rounded-xl p-4 border border-slate-200 flex items-center justify-between">
+                        <div className="flex-1">
+                          <p className="text-sm font-bold text-slate-700">{item.supplies?.nombre}</p>
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className="text-xs text-slate-500">Código: {item.supplies?.codigo}</span>
+                            {item.supplies?.grupo_prestacion && (
+                              <span className="text-xs text-blue-600 font-bold">
+                                {item.supplies.grupo_prestacion}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm font-bold">
+                            Cantidad: {item.cantidad}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Información Adicional */}
+              <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-slate-200 flex items-center justify-center">
+                    <Clock className="w-5 h-5 text-slate-600" />
+                  </div>
+                  <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Información Adicional</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1">Fecha de Creación</p>
+                    <p className="text-sm font-bold text-slate-700">
+                      {format(new Date(solicitudDetalle.created_at), 'dd/MM/yyyy HH:mm')}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1">Última Actualización</p>
+                    <p className="text-sm font-bold text-slate-700">
+                      {format(new Date(solicitudDetalle.updated_at), 'dd/MM/yyyy HH:mm')}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setSolicitudDetalle(null)}
+                className="btn-secondary"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Programación - Estilo Gemini */}
+      {solicitudProgramando && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-6xl overflow-hidden shadow-2xl border border-slate-100 flex flex-col max-h-[95vh]">
+            <div className="p-8 bg-slate-900 text-white flex justify-between items-center flex-shrink-0">
+              <div>
+                <h2 className="text-2xl font-black uppercase tracking-tighter">Programar Cirugía</h2>
+                <p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.3em] mt-1">
+                  Agendamiento Quirúrgico
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setSolicitudProgramando(null)
+                  setFormProgramacion({
+                    fecha: '',
+                    hora_inicio: '',
+                    hora_fin: '',
+                    operating_room_id: '',
+                    observaciones: '',
+                  })
+                  // Limpiar sessionStorage
+                  sessionStorage.removeItem('solicitud_gestionando')
+                  sessionStorage.removeItem('slot_seleccionado')
+                }}
+                className="p-2 hover:bg-white/10 rounded-full transition-colors"
+              >
+                <X size={24} className="text-white" />
+              </button>
+            </div>
+
+            <form onSubmit={handleProgramar} className="p-8 space-y-8 overflow-y-auto custom-scrollbar flex-1">
+              {/* Campos de fecha y hora - Estilo Gemini */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Fecha *</label>
+                  <input
+                    type="date"
+                    value={formProgramacion.fecha}
+                    onChange={(e) => setFormProgramacion({ ...formProgramacion, fecha: e.target.value })}
+                    className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl py-3.5 px-5 focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-slate-700"
+                    required
+                    min={format(new Date(), 'yyyy-MM-dd')}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Hora Fin *</label>
+                  <input
+                    type="time"
+                    value={formProgramacion.hora_fin}
+                    onChange={(e) => {
+                      const nuevaHoraFin = e.target.value
+                      // Validar que hora fin > hora inicio
+                      if (formProgramacion.hora_inicio && nuevaHoraFin) {
+                        const [horaInicioH, horaInicioM] = formProgramacion.hora_inicio.split(':').map(Number)
+                        const [horaFinH, horaFinM] = nuevaHoraFin.split(':').map(Number)
+                        const minutosInicio = horaInicioH * 60 + horaInicioM
+                        const minutosFin = horaFinH * 60 + horaFinM
+                        
+                        if (minutosFin <= minutosInicio) {
+                          showError('La hora de fin debe ser mayor que la hora de inicio')
+                          return
+                        }
+                      }
+                      setFormProgramacion({ ...formProgramacion, hora_fin: nuevaHoraFin })
+                    }}
+                    min={formProgramacion.hora_inicio || undefined}
+                    className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl py-3.5 px-5 focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-slate-700"
+                    required
+                  />
+                  {formProgramacion.hora_inicio && formProgramacion.hora_fin && (() => {
+                    const [horaInicioH, horaInicioM] = formProgramacion.hora_inicio.split(':').map(Number)
+                    const [horaFinH, horaFinM] = formProgramacion.hora_fin.split(':').map(Number)
+                    const minutosInicio = horaInicioH * 60 + horaInicioM
+                    const minutosFin = horaFinH * 60 + horaFinM
+                    const esValido = minutosFin > minutosInicio
+                    return !esValido ? (
+                      <p className="mt-2 text-sm text-red-600">La hora de fin debe ser mayor que {formProgramacion.hora_inicio}</p>
+                    ) : null
+                  })()}
+                </div>
+              </div>
+
+              {/* Vista de Calendario de Pabellones - Estilo Gemini EXACTO */}
+              {formProgramacion.fecha && (
+                <div className="flex flex-col lg:flex-row gap-6 animate-in fade-in duration-500">
+                  {/* Sidebar Izquierdo - Solicitud + Leyenda */}
+                  <div className="lg:w-80 flex-shrink-0 space-y-6">
+                    {/* Panel Solicitud en Curso */}
+                    <div className="bg-slate-900 p-8 rounded-[2rem] text-white overflow-hidden relative group">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500 rounded-full blur-[60px] opacity-20 transform translate-x-10 -translate-y-10"></div>
+                      <div className="relative z-10">
+                        <h3 className="text-xs font-black uppercase tracking-[0.2em] opacity-70 mb-1">
+                          Solicitud en curso
+                        </h3>
+                        {solicitudProgramando ? (
+                          <div className="space-y-4 mt-4">
+                            <div>
+                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Paciente</div>
+                              <div className="text-xl font-black uppercase tracking-tighter leading-tight">
+                                {solicitudProgramando.patients?.nombre} {solicitudProgramando.patients?.apellido}
+                              </div>
+                              <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">
+                                RUT: {solicitudProgramando.patients?.rut}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 bg-white/5 p-3 rounded-2xl border border-white/10">
+                              <Activity size={16} className="text-blue-500" />
+                              <span className="text-[10px] font-bold uppercase tracking-widest truncate">
+                                {solicitudProgramando.codigo_operacion}
+                              </span>
+                            </div>
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                              Cirujano: <span className="text-white">{solicitudProgramando.doctors?.nombre} {solicitudProgramando.doctors?.apellido}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-sm font-medium opacity-50 mt-2">Navegación libre por disponibilidad</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Panel Leyenda */}
+                    <div className="bg-white rounded-[2rem] border border-slate-100 p-6">
+                      <h4 className="text-[10px] font-black text-slate-800 mb-4 flex items-center gap-2 uppercase tracking-[0.2em]">
+                        <span className="w-4 h-4 rounded-md bg-blue-50 flex items-center justify-center text-blue-500 text-xs">?</span>
+                        Leyenda
+                      </h4>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full border-2 border-slate-200"></div>
+                          <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Disponible</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full bg-red-50 border-2 border-red-100"></div>
+                          <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Ocupado</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full bg-slate-900"></div>
+                          <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Prioridad / Convenio</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Grid Principal - Estilo EXACTO de la imagen */}
+                  <div className="flex-1 bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm overflow-hidden relative flex flex-col">
+                    {/* Header del Grid con fondo gris claro - SIEMPRE 4 COLUMNAS */}
+                    <div className="flex bg-slate-50 border-b border-slate-200 mb-0 flex-shrink-0">
+                      <div className="w-24 border-r border-slate-200 flex-shrink-0 flex items-center justify-center py-6">
+                        <Clock size={18} className="text-slate-400" />
+                      </div>
+                      {/* Mostrar siempre 4 columnas */}
+                      {Array.from({ length: 4 }).map((_, index) => {
+                        const p = pabellonesMostrar[index]
+                        if (!p) {
+                          // Si no hay pabellón en esta posición, mostrar columna vacía
+                          return (
+                            <div key={`empty-${index}`} className="flex-1 text-center py-6 border-r last:border-r-0 bg-slate-50/50">
+                              <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider leading-none">
+                                Pabellón {index + 1}
+                              </h4>
+                              <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider mt-1.5 block">
+                                No disponible
+                              </span>
+                            </div>
+                          )
+                        }
+                        
+                        // Calcular libres correctamente: slots totales menos los ocupados
+                        const ocupados = slotsHorarios.filter(time => {
+                          const { status } = getSlotStatus(p.id, time)
+                          return status === 'occupied' || status === 'blocked'
+                        }).length
+                        const libres = slotsHorarios.length - ocupados
+                        
+                        return (
+                          <div key={p.id} className="flex-1 text-center py-6 border-r last:border-r-0">
+                            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider leading-none">
+                              {p.nombre}
+                            </h4>
+                            <span className="text-[10px] font-bold text-green-600 uppercase tracking-wider mt-1.5 block">
+                              {libres} Libres
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* Filas de horarios con scroll */}
+                    <div className={`flex-1 overflow-y-auto custom-scrollbar bg-white ${formProgramacion.operating_room_id && formProgramacion.hora_inicio ? 'pb-24' : ''}`}>
+                      {slotsHorarios.map((time) => {
+                        const horaSeleccionada = formProgramacion.hora_inicio === time
+                        
+                        return (
+                          <div key={time} className="flex border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors group">
+                            <div className="w-24 border-r border-slate-200 flex-shrink-0 flex items-center justify-center py-10 text-[10px] font-bold text-slate-400 group-hover:text-blue-600 transition-colors uppercase tracking-widest">
+                              {time}
+                            </div>
+                            {/* Mostrar siempre 4 columnas */}
+                            {Array.from({ length: 4 }).map((_, index) => {
+                              const pav = pabellonesMostrar[index]
+                              
+                              if (!pav) {
+                                // Si no hay pabellón, mostrar celda vacía/deshabilitada
+                                return (
+                                  <div
+                                    key={`${time}-empty-${index}`}
+                                    className="flex-1 min-h-[110px] border-r last:border-r-0 p-2.5 bg-slate-50/30"
+                                  >
+                                    <div className="h-full w-full flex items-center justify-center border-2 border-dashed rounded-2xl border-slate-100 opacity-50">
+                                      <span className="text-[8px] text-slate-300 font-black uppercase tracking-widest">
+                                        N/A
+                                      </span>
+                                    </div>
+                                  </div>
+                                )
+                              }
+                              
+                              const { status, data } = getSlotStatus(pav.id, time)
+                              const isSelected = formProgramacion.operating_room_id === pav.id && horaSeleccionada
+                              const isOccupied = status === 'occupied' || status === 'blocked'
+                              
+                              return (
+                                <div
+                                  key={`${time}-${pav.id}`}
+                                  onClick={() => {
+                                    if (isOccupied) {
+                                      if (status === 'occupied') {
+                                        showError('Este horario ya está ocupado por otra cirugía')
+                                      } else if (status === 'blocked') {
+                                        showError('Este horario está bloqueado por convenio')
+                                      }
+                                      return
+                                    }
+                                    setFormProgramacion({ 
+                                      ...formProgramacion, 
+                                      operating_room_id: pav.id,
+                                      hora_inicio: time
+                                    })
+                                  }}
+                                  className={`flex-1 min-h-[110px] border-r last:border-r-0 p-2.5 transition-all ${
+                                    isOccupied ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-blue-50/30'
+                                  }`}
+                                >
+                                  {status === 'occupied' ? (
+                                    <div className="h-full w-full bg-red-50 rounded-2xl border border-red-100 p-4 flex flex-col justify-between shadow-sm">
+                                      <span className="text-[10px] font-black text-red-500 uppercase tracking-wider mb-1">Ocupado</span>
+                                      <span className="text-xs font-bold text-red-900 leading-tight truncate">
+                                        {data.doctors?.apellido ? `Dr. ${data.doctors.apellido}` : data.doctors?.nombre ? `Dr. ${data.doctors.nombre}` : 'Cirugía'}
+                                      </span>
+                                    </div>
+                                  ) : status === 'blocked' ? (
+                                    <div className="h-full w-full bg-slate-900 rounded-2xl border-2 border-amber-400/50 p-4 flex flex-col justify-between shadow-lg">
+                                      <span className="text-[10px] font-black text-amber-400 uppercase tracking-wider leading-none flex items-center gap-1">
+                                        <Lock size={8} /> Convenio
+                                      </span>
+                                      <span className="text-[11px] font-black text-white uppercase tracking-tighter leading-tight truncate">
+                                        Bloqueado
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div className={`h-full w-full flex items-center justify-center border-2 border-dashed rounded-2xl transition-all duration-300 ${
+                                      isSelected 
+                                        ? 'border-blue-500 bg-blue-50 scale-[0.97] shadow-inner' 
+                                        : 'border-slate-200 group-hover:border-slate-300'
+                                    }`}>
+                                      {isSelected && (
+                                        <CheckCircle2 size={36} className="text-blue-500 animate-in zoom-in duration-300" />
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    
+                    {/* Footer flotante cuando hay selección */}
+                    {formProgramacion.operating_room_id && formProgramacion.hora_inicio && (
+                      <div className="absolute bottom-0 left-0 right-0 bg-slate-900 text-white p-6 flex items-center justify-between animate-in slide-in-from-bottom-full duration-300 shadow-[0_-10px_40px_rgba(0,0,0,0.2)]">
+                        <div className="flex items-center gap-6">
+                          <div className="bg-blue-600 p-4 rounded-2xl">
+                            <Activity size={24} />
+                          </div>
+                          <div>
+                            <div className="text-[9px] text-blue-400 font-black uppercase tracking-[0.3em] mb-1">
+                              Bloque Seleccionado
+                            </div>
+                            <div className="font-black text-xl uppercase tracking-tighter">
+                              {pabellonesMostrar.find(p => p.id === formProgramacion.operating_room_id)?.nombre || 'Pabellón'} 
+                              <span className="text-slate-600 mx-3">•</span> 
+                              {formProgramacion.hora_inicio}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const pabellon = pabellonesMostrar.find(p => p.id === formProgramacion.operating_room_id)
+                            if (pabellon && formProgramacion.hora_inicio) {
+                              // Calcular hora fin (asumiendo 1 hora por defecto)
+                              const [hours, minutes] = formProgramacion.hora_inicio.split(':')
+                              const horaFin = new Date()
+                              horaFin.setHours(parseInt(hours) + 1, parseInt(minutes))
+                              const horaFinStr = `${horaFin.getHours().toString().padStart(2, '0')}:${horaFin.getMinutes().toString().padStart(2, '0')}`
+                              
+                              setFormProgramacion(prev => ({
+                                ...prev,
+                                hora_fin: horaFinStr
+                              }))
+                            }
+                          }}
+                          className="bg-blue-500 hover:bg-blue-400 text-white px-12 py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all"
+                        >
+                          Proceder al agendamiento
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Select de Pabellón - Estilo Gemini (solo si no se seleccionó desde el calendario) */}
+              {!formProgramacion.operating_room_id && (
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    Seleccionar Pabellón Manualmente *
+                  </label>
+                  <select
+                    value={formProgramacion.operating_room_id}
+                    onChange={(e) => setFormProgramacion({ ...formProgramacion, operating_room_id: e.target.value })}
+                    className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl py-3.5 px-5 focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-slate-700"
+                    required
+                  >
+                    <option value="">-- Seleccionar Pabellón --</option>
+                    {pabellones.map(pabellon => {
+                      // Verificar si está ocupado en la hora seleccionada
+                      let estaOcupado = false
+                      if (formProgramacion.fecha && formProgramacion.hora_inicio) {
+                        const cirugiaOcupada = cirugiasFecha.find(c => 
+                          c.operating_room_id === pabellon.id &&
+                          c.hora_inicio <= formProgramacion.hora_inicio + ':00' && 
+                          c.hora_fin > formProgramacion.hora_inicio + ':00'
+                        )
+                        const bloqueo = bloqueosFecha.find(b => 
+                          b.operating_room_id === pabellon.id &&
+                          b.hora_inicio <= formProgramacion.hora_inicio + ':00' && 
+                          b.hora_fin > formProgramacion.hora_inicio + ':00'
+                        )
+                        estaOcupado = !!cirugiaOcupada || !!bloqueo
+                      }
+                      
+                      return (
+                        <option 
+                          key={pabellon.id} 
+                          value={pabellon.id}
+                          disabled={estaOcupado}
+                        >
+                          {pabellon.nombre} {estaOcupado ? '(Ocupado)' : ''}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </div>
+              )}
+
+              {/* Campo de Observaciones - Estilo Gemini */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                  Observaciones
+                </label>
+                <textarea
+                  value={formProgramacion.observaciones}
+                    onChange={(e) => setFormProgramacion({ ...formProgramacion, observaciones: sanitizeString(e.target.value) })}
+                  className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl py-3.5 px-5 focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-slate-700 resize-none"
+                  rows={3}
+                  placeholder="Notas adicionales sobre la cirugía..."
+                  maxLength={500}
+                />
+                <p className="text-xs text-gray-500 mt-1 text-right">
+                  {formProgramacion.observaciones?.length || 0}/500 caracteres
+                </p>
+              </div>
+
+              {/* Botones de Acción - Estilo Gemini */}
+              <div className="flex justify-end gap-4 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSolicitudProgramando(null)
+                    setFormProgramacion({
+                      fecha: '',
+                      hora_inicio: '',
+                      hora_fin: '',
+                      operating_room_id: '',
+                      observaciones: '',
+                    })
+                    // Limpiar sessionStorage
+                    sessionStorage.removeItem('solicitud_gestionando')
+                    sessionStorage.removeItem('slot_seleccionado')
+                  }}
+                  className="px-8 py-3.5 text-slate-400 hover:text-slate-600 font-black text-xs uppercase tracking-widest transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-12 py-3.5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-blue-200 transition-all active:scale-95 disabled:bg-slate-200 disabled:shadow-none flex items-center justify-center gap-2"
+                  disabled={!formProgramacion.operating_room_id || !formProgramacion.fecha || !formProgramacion.hora_inicio || !formProgramacion.hora_fin || programarCirugia.isPending}
+                >
+                  {programarCirugia.isPending ? (
+                    <>
+                      <LoadingSpinner size="sm" />
+                      Programando...
+                    </>
+                  ) : (
+                    'Programar Cirugía'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmación para Rechazar */}
+      <Modal
+        isOpen={showConfirmRechazar}
+        onClose={() => {
+          setShowConfirmRechazar(false)
+          setSolicitudARechazar(null)
+        }}
+        title="Confirmar Rechazo"
+      >
+        {solicitudARechazar && (
+          <div className="space-y-6">
+            <p className="text-slate-700">
+              ¿Está seguro de que desea rechazar la solicitud de{' '}
+              <span className="font-black">
+                {solicitudARechazar.patients?.nombre} {solicitudARechazar.patients?.apellido}
+              </span>?
+            </p>
+            <p className="text-sm text-slate-500">
+              Esta acción no se puede deshacer.
+            </p>
+            <div className="flex gap-4 justify-end">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowConfirmRechazar(false)
+                  setSolicitudARechazar(null)
+                }}
+                disabled={rechazarSolicitud.isPending}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={confirmarRechazar}
+                loading={rechazarSolicitud.isPending}
+                disabled={rechazarSolicitud.isPending}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                Confirmar Rechazo
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  )
+}

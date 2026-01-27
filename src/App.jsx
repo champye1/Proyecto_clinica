@@ -1,0 +1,190 @@
+import { useEffect, useState } from 'react'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { supabase } from './config/supabase'
+import Inicio from './pages/auth/Inicio'
+import LoginPabellon from './pages/auth/LoginPabellon'
+import LoginDoctor from './pages/auth/LoginDoctor'
+import PabellonLayout from './layouts/PabellonLayout'
+import DoctorLayout from './layouts/DoctorLayout'
+import LoadingSpinner from './components/common/LoadingSpinner'
+
+function AppContent() {
+  const location = useLocation()
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [userRole, setUserRole] = useState(null)
+
+  useEffect(() => {
+    // Verificar sesión inicial
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+      if (session?.user) {
+        fetchUserRole(session.user.id)
+      } else {
+        setUserRole(null)
+        setLoading(false)
+      }
+    })
+
+    // Escuchar cambios de autenticación
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null)
+      if (session?.user) {
+        fetchUserRole(session.user.id)
+      } else {
+        // Cuando se hace logout, asegurar que el loading se desactive
+        setUserRole(null)
+        setLoading(false)
+        // Limpiar sessionStorage si existe
+        sessionStorage.removeItem('validating_login')
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const fetchUserRole = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle() // Usa maybeSingle() en lugar de single() para manejar cuando no hay registro
+
+      if (error) {
+        // Si el error es que no existe el registro, no es crítico
+        if (error.code === 'PGRST116') {
+          logger.warn('Usuario no encontrado en tabla users. Debe crear el registro primero.')
+          setUserRole(null)
+          setLoading(false)
+          return
+        }
+        
+        // Manejar sesión expirada (401)
+        if (error.status === 401 || error.message?.includes('JWT')) {
+          logger.warn('Sesión expirada. Redirigiendo al login...')
+          await supabase.auth.signOut()
+          setUser(null)
+          setUserRole(null)
+          setLoading(false)
+          return
+        }
+        
+        throw error
+      }
+      
+      if (data) {
+        setUserRole(data.role)
+      } else {
+        setUserRole(null)
+      }
+    } catch (error) {
+      logger.errorWithContext('Error fetching user role', error)
+      
+      // Manejar sesión expirada en catch también
+      if (error.status === 401 || error.message?.includes('JWT') || error.message?.includes('expired')) {
+        console.warn('Sesión expirada. Redirigiendo al login...')
+        await supabase.auth.signOut()
+        setUser(null)
+        setUserRole(null)
+      } else {
+        setUserRole(null)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return <LoadingSpinner />
+  }
+
+  return (
+    <Routes>
+      <Route 
+        path="/" 
+        element={
+          user && userRole ? (
+            <Navigate to={userRole === 'pabellon' ? '/pabellon' : '/doctor'} replace />
+          ) : (
+            <Inicio />
+          )
+        } 
+      />
+      
+      <Route 
+        path="/login/pabellon" 
+        element={
+          user && userRole === 'pabellon' ? (
+            <Navigate to="/pabellon" />
+          ) : user && userRole === 'doctor' ? (
+            // Si es doctor intentando acceder a login de pabellon, no redirigir automáticamente
+            // Dejar que LoginPabellon maneje el error
+            <LoginPabellon />
+          ) : user ? (
+            <Navigate to="/" />
+          ) : (
+            <LoginPabellon />
+          )
+        } 
+      />
+      
+      <Route 
+        path="/login/doctor" 
+        element={
+          user && userRole === 'doctor' ? (
+            <Navigate to="/doctor" />
+          ) : user && userRole === 'pabellon' ? (
+            // Si es pabellon intentando acceder a login de doctor, no redirigir automáticamente
+            // Dejar que LoginDoctor maneje el error
+            <LoginDoctor />
+          ) : user ? (
+            <Navigate to="/" />
+          ) : (
+            <LoginDoctor />
+          )
+        } 
+      />
+      
+      <Route 
+        path="/pabellon/*" 
+        element={
+          user && userRole === 'pabellon' && !sessionStorage.getItem('validating_login') ? (
+            <PabellonLayout />
+          ) : user && sessionStorage.getItem('validating_login') ? (
+            // Si estamos validando, no redirigir todavía
+            <LoadingSpinner />
+          ) : user ? (
+            <Navigate to="/" replace />
+          ) : (
+            <Navigate to="/login/pabellon" replace />
+          )
+        } 
+      />
+      
+      <Route 
+        path="/doctor/*" 
+        element={
+          user && userRole === 'doctor' && !sessionStorage.getItem('validating_login') ? (
+            <DoctorLayout />
+          ) : user && sessionStorage.getItem('validating_login') ? (
+            // Si estamos validando, no redirigir todavía
+            <LoadingSpinner />
+          ) : user ? (
+            <Navigate to="/" replace />
+          ) : (
+            <Navigate to="/login/doctor" replace />
+          )
+        } 
+      />
+    </Routes>
+  )
+}
+
+function App() {
+  return <AppContent />
+}
+
+export default App

@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+  
+  body {
+    @apply text-slate-900 antialiased;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    background-color: #fcfdfe;
+  }
+
+  /* Tema Claro (por defecto) - Usar gris claro en lugar de blanco puro */
+  body.theme-light {
+    background-color: #f8fafc !important; /* slate-50 - reduce cansancio visual */
+    color: #0f172a !important;
+  }
+
+  /* Tema Oscuro */
+  body.theme-dark {
+    background-color: #0f172a !important;
+    color: #ffffff !important;
+  }
+
+  body.theme-dark .card {
+    @apply bg-slate-800 border-slate-700;
+  }
+
+  /* Tema Médico */
+  body.theme-medical {
+    background-color: #f8fafc !important;
+    color: #0f172a !important;
+  }
+
+  body.theme-medical .card {
+    @apply bg-white border-blue-100;
+  }
+  
+  /* Transiciones suaves para cambios de tema - Reducidas para respuesta más rápida */
+  * {
+    transition-property: background-color, border-color, color;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms; /* Reducido de 300ms a 150ms para respuesta más rápida */
+  }
+  
+  /* Desactivar transiciones en el body y html durante cambios de tema para respuesta instantánea */
+  body.theme-changing,
+  html.theme-changing {
+    transition: none !important;
+  }
+  
+  /* Asegurar que el html también tenga el fondo correcto */
+  html {
+    transition: background-color 0.15s ease; /* Reducido para respuesta más rápida */
+  }
+  
+  html[data-theme="dark"] {
+    background-color: #0f172a;
+  }
+  
+  html[data-theme="medical"] {
+    background-color: #f8fafc;
+  }
+  
+  html[data-theme="light"] {
+    background-color: #f8fafc; /* slate-50 */
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-blue-600 hover:bg-blue-700 text-white px-6 py-3.5 rounded-2xl font-black text-xs uppercase tracking-[0.15em] shadow-xl shadow-blue-200 transition-all active:scale-95;
+  }
+  
+  .btn-secondary {
+    @apply bg-white border border-slate-200 text-slate-700 px-6 py-3 rounded-xl font-bold text-xs uppercase shadow-sm hover:bg-slate-50 transition-all;
+  }
+  
+  .btn-danger {
+    @apply bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl font-black text-xs uppercase transition-all;
+  }
+  
+  .card {
+    @apply bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-8;
+  }
+  
+  /* Mejorar contraste en tema claro */
+  body.theme-light .card {
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  }
+  
+  body.theme-light .card:hover {
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  }
+  
+  .input-field {
+    @apply w-full bg-slate-50 border-2 border-slate-50 rounded-2xl py-4 px-5 focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-slate-700;
+  }
+  
+  .label-field {
+    @apply block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+    border: 2px solid white;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+  /* Ocultar scrollbar horizontal en móvil */
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE y Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;  /* Chrome, Safari y Opera */
+  }
+}
