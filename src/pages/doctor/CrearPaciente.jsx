@@ -1,12 +1,13 @@
-import { useState } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../config/supabase'
 import { UserPlus, Package, AlertCircle, Ban } from 'lucide-react'
 import { formatRut, cleanRut, validateRut, isValidRutFormat } from '../../utils/rutFormatter'
 import { sanitizeString, sanitizeRut } from '../../utils/sanitizeInput'
 import SearchableSelect from '../../components/SearchableSelect'
-import { codigosOperaciones } from '../../data/codigosOperaciones'
+import { codigosOperaciones, getGrupoFonasaByCodigo, insumoAplicaParaGrupo } from '../../data/codigosOperaciones'
 import { useNotifications } from '../../hooks/useNotifications'
+import { useTheme } from '../../contexts/ThemeContext'
 import ConfirmModal from '../../components/common/ConfirmModal'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 
@@ -28,6 +29,7 @@ export default function CrearPaciente() {
 
   const queryClient = useQueryClient()
   const { showError, showSuccess } = useNotifications()
+  const { theme } = useTheme()
 
   const { data: doctor } = useQuery({
     queryKey: ['doctor-actual'],
@@ -51,7 +53,7 @@ export default function CrearPaciente() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('supplies')
-        .select('id, nombre, codigo, grupo_prestacion')
+        .select('id, nombre, codigo, grupo_prestacion, grupos_fonasa')
         .eq('activo', true)
         .is('deleted_at', null)
         .order('nombre', { ascending: true })
@@ -60,6 +62,19 @@ export default function CrearPaciente() {
       return data
     },
   })
+
+  // Insumos filtrados por grupo Fonasa de la cirugía seleccionada (ej. mallas solo en hernias, no en neuro)
+  const grupoFonasa = getGrupoFonasaByCodigo(formData.codigo_operacion)
+  const insumosDisponibles = useMemo(() => {
+    if (!grupoFonasa) return insumos
+    return insumos.filter(ins => insumoAplicaParaGrupo(ins.grupos_fonasa, grupoFonasa))
+  }, [insumos, grupoFonasa])
+
+  useEffect(() => {
+    if (insumoSeleccionado && !insumosDisponibles.some(i => i.id === insumoSeleccionado)) {
+      setInsumoSeleccionado('')
+    }
+  }, [insumosDisponibles, insumoSeleccionado])
 
   const crearPacienteYSolicitud = useMutation({
     mutationFn: async (data) => {
@@ -302,7 +317,7 @@ export default function CrearPaciente() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-gray-900">Crear Ficha de Paciente</h1>
+      <h1 className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Crear Ficha de Paciente</h1>
 
       {/* Alerta si el doctor está en vacaciones */}
       {estaEnVacaciones && (
@@ -456,10 +471,10 @@ export default function CrearPaciente() {
             <div className="flex gap-2 mb-4">
               <div className="flex-1">
                 <SearchableSelect
-                  options={insumos}
+                  options={insumosDisponibles}
                   value={insumoSeleccionado}
                   onChange={(id) => setInsumoSeleccionado(id)}
-                  placeholder="Buscar insumo..."
+                  placeholder={grupoFonasa ? `Insumos para esta cirugía (grupo ${grupoFonasa})` : 'Primero elija código de operación'}
                   valueKey="id"
                   displayFormat={(insumo) => `${insumo.codigo} - ${insumo.nombre}`}
                 />

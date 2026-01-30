@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../config/supabase'
-import { Clock, CheckCircle2, XCircle, Edit, X, Package } from 'lucide-react'
+import { Clock, CheckCircle2, XCircle, Edit, X, Package, CalendarClock } from 'lucide-react'
 import { format } from 'date-fns'
 import { useNotifications } from '../../hooks/useNotifications'
 import { sanitizeString } from '../../utils/sanitizeInput'
@@ -9,7 +9,7 @@ import Pagination from '../../components/common/Pagination'
 import Modal from '../../components/common/Modal'
 import Button from '../../components/common/Button'
 import SearchableSelect from '../../components/SearchableSelect'
-import { codigosOperaciones } from '../../data/codigosOperaciones'
+import { codigosOperaciones, getGrupoFonasaByCodigo, insumoAplicaParaGrupo } from '../../data/codigosOperaciones'
 
 export default function Solicitudes() {
   const queryClient = useQueryClient()
@@ -61,6 +61,11 @@ export default function Solicitudes() {
           surgeries(
             fecha,
             hora_inicio,
+            hora_fin,
+            estado_hora,
+            fecha_anterior,
+            hora_inicio_anterior,
+            hora_fin_anterior,
             operating_rooms:operating_room_id(nombre)
           )
         `)
@@ -84,7 +89,7 @@ export default function Solicitudes() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('supplies')
-        .select('id, nombre, codigo, grupo_prestacion')
+        .select('id, nombre, codigo, grupo_prestacion, grupos_fonasa')
         .eq('activo', true)
         .is('deleted_at', null)
         .order('nombre', { ascending: true })
@@ -94,6 +99,19 @@ export default function Solicitudes() {
     },
     enabled: !!doctor,
   })
+
+  // Insumos filtrados por grupo Fonasa de la cirugía (mallas solo en hernias, no en neuro)
+  const grupoFonasaEdicion = getGrupoFonasaByCodigo(formEdicion.codigo_operacion)
+  const insumosDisponiblesEdicion = useMemo(() => {
+    if (!grupoFonasaEdicion) return insumos
+    return insumos.filter(ins => insumoAplicaParaGrupo(ins.grupos_fonasa, grupoFonasaEdicion))
+  }, [insumos, grupoFonasaEdicion])
+
+  useEffect(() => {
+    if (insumoSeleccionado && !insumosDisponiblesEdicion.some(i => i.id === insumoSeleccionado)) {
+      setInsumoSeleccionado('')
+    }
+  }, [insumosDisponiblesEdicion, insumoSeleccionado])
 
   // Paginación
   const totalPages = Math.ceil(solicitudes.length / itemsPerPage)
@@ -262,6 +280,25 @@ export default function Solicitudes() {
     return estados[estado] || estados.pendiente
   }
 
+  // Notificar a pabellón que el paciente/doctor solicitó reagendamiento (vía RPC)
+  const solicitarReagendamiento = useMutation({
+    mutationFn: async (solicitud) => {
+      const { data, error } = await supabase.rpc('notificar_reagendamiento_a_pabellon', {
+        p_surgery_request_id: solicitud.id,
+      })
+      if (error) throw error
+      if (!data?.success) throw new Error('No se pudo enviar la notificación')
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['solicitudes-doctor'])
+      showSuccess('Pabellón ha sido notificado de la solicitud de reagendamiento.')
+    },
+    onError: (error) => {
+      showError(error.message || 'Error al notificar a pabellón.')
+    },
+  })
+
   if (isLoading) {
     return <div className="text-center py-8">Cargando solicitudes...</div>
   }
@@ -311,6 +348,32 @@ export default function Solicitudes() {
                   </span>
                 </div>
 
+                {(solicitud.estado === 'aceptada' || solicitud.estado === 'pendiente') && (
+                  <div className="mb-4 space-y-2">
+                    {solicitud.reagendamiento_notificado_at && (
+                      <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-amber-600" />
+                        Ya se notificó sobre el reagendamiento
+                        <span className="text-amber-600/80 text-xs">
+                          ({format(new Date(solicitud.reagendamiento_notificado_at), 'dd/MM/yyyy HH:mm')})
+                        </span>
+                      </p>
+                    )}
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => solicitarReagendamiento.mutate(solicitud)}
+                        disabled={solicitarReagendamiento.isPending}
+                        className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
+                        title="Notificar a pabellón que el paciente solicitó reagendamiento"
+                      >
+                        <CalendarClock className="w-4 h-4" />
+                        Reagendar
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {solicitud.hora_recomendada && (
                   <div className="mb-2">
                     <span className="text-sm font-medium">Hora Recomendada: </span>
@@ -342,11 +405,16 @@ export default function Solicitudes() {
                   <div className="mt-4 p-3 bg-green-50 rounded-lg">
                     <p className="text-sm font-medium text-green-800 mb-1">Cirugía Programada:</p>
                     <p className="text-sm text-green-700">
-                      {format(new Date(solicitud.surgeries[0].fecha), 'dd/MM/yyyy')} a las {solicitud.surgeries[0].hora_inicio}
+                      {format(new Date(solicitud.surgeries[0].fecha), 'dd/MM/yyyy')} a las {typeof solicitud.surgeries[0].hora_inicio === 'string' ? solicitud.surgeries[0].hora_inicio.substring(0, 5) : solicitud.surgeries[0].hora_inicio}
                     </p>
                     <p className="text-sm text-green-700">
                       Pabellón: {solicitud.surgeries[0].operating_rooms?.nombre}
                     </p>
+                    {solicitud.surgeries[0].estado_hora === 'reagendado' && solicitud.surgeries[0].fecha_anterior && (
+                      <p className="text-xs text-amber-700 mt-2 pt-2 border-t border-amber-200">
+                        Fecha original (ya no aplica): {format(new Date(solicitud.surgeries[0].fecha_anterior), 'dd/MM/yyyy')} a las {typeof solicitud.surgeries[0].hora_inicio_anterior === 'string' ? solicitud.surgeries[0].hora_inicio_anterior.substring(0, 5) : solicitud.surgeries[0].hora_inicio_anterior}
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -446,10 +514,10 @@ export default function Solicitudes() {
               <div className="flex gap-2 mb-4">
                 <div className="flex-1">
                   <SearchableSelect
-                    options={insumos}
+                    options={insumosDisponiblesEdicion}
                     value={insumoSeleccionado}
                     onChange={(id) => setInsumoSeleccionado(id)}
-                    placeholder="Buscar insumo..."
+                    placeholder={grupoFonasaEdicion ? `Insumos para esta cirugía (grupo ${grupoFonasaEdicion})` : 'Buscar insumo...'}
                     valueKey="id"
                     displayFormat={(insumo) => `${insumo.codigo} - ${insumo.nombre}`}
                   />

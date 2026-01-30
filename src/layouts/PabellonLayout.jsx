@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
 import { supabase } from '../config/supabase'
 import { 
   LayoutDashboard, 
@@ -31,6 +33,7 @@ import Insumos from '../pages/pabellon/Insumos'
 import Auditoria from '../pages/pabellon/Auditoria'
 import { useRealtimeNotifications } from '../hooks/useRealtimeNotifications'
 import { useUnreadNotifications } from '../hooks/useUnreadNotifications'
+import { useNotificationsList } from '../hooks/useNotificationsList'
 import { useTheme } from '../contexts/ThemeContext'
 import Modal from '../components/common/Modal'
 
@@ -51,7 +54,22 @@ export default function PabellonLayout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [userId, setUserId] = useState(null)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false)
+  const notificationsDropdownRef = useRef(null)
   const { theme, themes, changeTheme } = useTheme()
+
+  // Cerrar dropdown al hacer clic fuera
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (notificationsDropdownRef.current && !notificationsDropdownRef.current.contains(event.target)) {
+        setShowNotificationsDropdown(false)
+      }
+    }
+    if (showNotificationsDropdown) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showNotificationsDropdown])
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -72,6 +90,7 @@ export default function PabellonLayout() {
   
   // Obtener contador de notificaciones no leídas
   const { count: unreadCount } = useUnreadNotifications(userId)
+  const { notifications, markAsRead, markAllAsRead } = useNotificationsList(userId, { enabled: showNotificationsDropdown })
 
   const handleLogout = async () => {
     // Limpiar todos los datos almacenados antes de cerrar sesión
@@ -80,6 +99,18 @@ export default function PabellonLayout() {
     
     await supabase.auth.signOut()
     window.location.href = '/'
+  }
+
+  const handleNotificationClick = (n) => {
+    if (!n.vista) markAsRead.mutate(n.id)
+    setShowNotificationsDropdown(false)
+    if (n.tipo === 'solicitud_reagendamiento') {
+      navigate('/pabellon/calendario', { state: { fromReagendamientoNotification: true, surgeryRequestId: n.relacionado_con } })
+    } else if (n.tipo === 'operacion_reagendada') {
+      navigate('/pabellon/calendario', { state: { surgeryId: n.relacionado_con } })
+    } else if (n.tipo === 'solicitud_aceptada' || n.tipo === 'solicitud_rechazada' || n.tipo === 'operacion_programada') {
+      navigate('/pabellon/solicitudes')
+    }
   }
 
   const isSelected = (path) => {
@@ -278,11 +309,14 @@ export default function PabellonLayout() {
           </div>
           <div className="flex items-center gap-3 sm:gap-4">
             {/* Notificaciones */}
-            <div className="relative">
+            <div className="relative" ref={notificationsDropdownRef}>
               <button
+                type="button"
+                onClick={() => setShowNotificationsDropdown((v) => !v)}
                 className={`w-8 h-8 sm:w-10 sm:h-10 ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-300 hover:text-blue-400 hover:bg-slate-700' : theme === 'medical' ? 'bg-blue-50 border-blue-200 text-blue-600 hover:text-blue-700 hover:bg-blue-100' : 'bg-slate-100 border-slate-200 text-slate-400 hover:text-blue-600 hover:bg-blue-50'} rounded-xl flex items-center justify-center border transition-all relative`}
                 title="Notificaciones"
                 aria-label="Notificaciones"
+                aria-expanded={showNotificationsDropdown}
               >
                 <Bell className="w-4 h-4 sm:w-[18px] sm:h-[18px]" />
                 {unreadCount > 0 && (
@@ -291,6 +325,63 @@ export default function PabellonLayout() {
                   </span>
                 )}
               </button>
+
+              {showNotificationsDropdown && (
+                <div className={`absolute right-0 top-full mt-2 w-80 sm:w-96 max-h-[70vh] overflow-hidden rounded-2xl border shadow-xl z-50 flex flex-col ${
+                  theme === 'dark' ? 'bg-slate-800 border-slate-700' : theme === 'medical' ? 'bg-white border-blue-200' : 'bg-white border-slate-200'
+                }`}>
+                  <div className={`flex items-center justify-between px-4 py-3 border-b ${
+                    theme === 'dark' ? 'border-slate-700' : 'border-slate-200'
+                  }`}>
+                    <h3 className={`font-bold text-sm uppercase tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+                      Notificaciones
+                    </h3>
+                    {unreadCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => markAllAsRead.mutate()}
+                        className="text-xs font-semibold text-blue-600 hover:underline"
+                      >
+                        Marcar todas como leídas
+                      </button>
+                    )}
+                  </div>
+                  <div className="overflow-y-auto flex-1">
+                    {notifications.length === 0 ? (
+                      <p className={`px-4 py-6 text-center text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                        No hay notificaciones
+                      </p>
+                    ) : (
+                      <ul className="divide-y divide-slate-200 dark:divide-slate-700">
+                        {notifications.map((n) => (
+                          <li
+                            key={n.id}
+                            onClick={() => handleNotificationClick(n)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleNotificationClick(n) }}
+                            className={`px-4 py-3 cursor-pointer transition-colors ${
+                              n.vista
+                                ? theme === 'dark' ? 'bg-slate-800/50 hover:bg-slate-700/50' : 'hover:bg-slate-50'
+                                : theme === 'dark' ? 'bg-blue-900/20 hover:bg-slate-700/50' : 'bg-blue-50/50 hover:bg-slate-50'
+                            }`}
+                          >
+                            <p className={`font-semibold text-sm ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+                              {n.titulo}
+                            </p>
+                            <p className={`text-xs mt-0.5 line-clamp-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+                              {n.mensaje}
+                            </p>
+                            <p className={`text-[10px] mt-1 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                              {format(new Date(n.created_at), "d MMM yyyy, HH:mm", { locale: es })}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
             {/* Configuración */}
             <button

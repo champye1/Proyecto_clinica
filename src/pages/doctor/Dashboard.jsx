@@ -149,10 +149,10 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">
+        <h1 className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
           Bienvenido, Dr. {doctor.nombre} {doctor.apellido}
         </h1>
-        <p className="text-gray-600 mt-2">
+        <p className={`mt-2 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>
           {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
         </p>
       </div>
@@ -162,13 +162,13 @@ export default function Dashboard() {
         <div className="card">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Cirugías Hoy</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">
+              <p className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>Cirugías Hoy</p>
+              <p className={`text-3xl font-bold mt-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                 {cirugiasHoy.length}
               </p>
             </div>
-            <div className="bg-blue-100 p-3 rounded-full">
-              <Calendar className="w-8 h-8 text-blue-600" />
+            <div className={theme === 'dark' ? 'bg-blue-900/50 p-3 rounded-full' : 'bg-blue-100 p-3 rounded-full'}>
+              <Calendar className={`w-8 h-8 ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`} />
             </div>
           </div>
         </div>
@@ -176,13 +176,13 @@ export default function Dashboard() {
         <div className="card">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Solicitudes Pendientes</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">
+              <p className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>Solicitudes Pendientes</p>
+              <p className={`text-3xl font-bold mt-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                 {solicitudesPendientes.length}
               </p>
             </div>
-            <div className="bg-yellow-100 p-3 rounded-full">
-              <Clock className="w-8 h-8 text-yellow-600" />
+            <div className={theme === 'dark' ? 'bg-yellow-900/50 p-3 rounded-full' : 'bg-yellow-100 p-3 rounded-full'}>
+              <Clock className={`w-8 h-8 ${theme === 'dark' ? 'text-yellow-400' : 'text-yellow-600'}`} />
             </div>
           </div>
         </div>
@@ -190,13 +190,13 @@ export default function Dashboard() {
         <div className="card">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Cirugías Confirmadas</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">
+              <p className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>Cirugías Confirmadas</p>
+              <p className={`text-3xl font-bold mt-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                 {cirugiasConfirmadas.length}
               </p>
             </div>
-            <div className="bg-green-100 p-3 rounded-full">
-              <CheckCircle2 className="w-8 h-8 text-green-600" />
+            <div className={theme === 'dark' ? 'bg-green-900/50 p-3 rounded-full' : 'bg-green-100 p-3 rounded-full'}>
+              <CheckCircle2 className={`w-8 h-8 ${theme === 'dark' ? 'text-green-400' : 'text-green-600'}`} />
             </div>
           </div>
         </div>
@@ -205,7 +205,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Cirugías de hoy */}
         <div className="card">
-          <h2 className="text-xl font-bold mb-4">Cirugías de Hoy</h2>
+          <h2 className={`text-xl font-bold mb-4 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Cirugías de Hoy</h2>
           <div className="space-y-3">
             {cirugiasHoy.length === 0 ? (
               <p className={`text-center py-4 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-500'}`}>No hay cirugías programadas para hoy</p>
@@ -245,7 +245,7 @@ export default function Dashboard() {
 
         {/* Muro de Recordatorios */}
         <div className="card">
-          <h2 className="text-xl font-bold mb-4">Muro de Recordatorios</h2>
+          <h2 className={`text-xl font-bold mb-4 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Muro de Recordatorios</h2>
           <div className="space-y-3">
             {recordatorios.length === 0 && cirugiasAceptadas.length === 0 ? (
               <p className={`text-center py-4 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-500'}`}>No hay recordatorios nuevos</p>
@@ -268,8 +268,13 @@ export default function Dashboard() {
                           {cirugia.patients?.nombre} {cirugia.patients?.apellido}
                         </p>
                         <p className={`text-sm ${theme === 'dark' ? 'text-slate-200' : 'text-gray-600'}`}>
-                          {format(new Date(cirugia.fecha), 'dd/MM/yyyy')} a las {cirugia.hora_inicio}
+                          {format(new Date(cirugia.fecha), 'dd/MM/yyyy')} a las {typeof cirugia.hora_inicio === 'string' ? cirugia.hora_inicio.substring(0, 5) : cirugia.hora_inicio}
                         </p>
+                        {cirugia.estado_hora === 'reagendado' && cirugia.fecha_anterior && (
+                          <p className={`text-xs mt-0.5 ${theme === 'dark' ? 'text-amber-300' : 'text-amber-700'}`}>
+                            Fecha original (ya no aplica): {format(new Date(cirugia.fecha_anterior), 'dd/MM/yyyy')} a las {typeof cirugia.hora_inicio_anterior === 'string' ? cirugia.hora_inicio_anterior.substring(0, 5) : cirugia.hora_inicio_anterior}
+                          </p>
+                        )}
                         <p className={`text-sm ${theme === 'dark' ? 'text-slate-200' : 'text-gray-600'}`}>
                           Pabellón: {cirugia.operating_rooms?.nombre}
                         </p>
@@ -316,7 +321,7 @@ export default function Dashboard() {
 
       {/* Próximas cirugías confirmadas */}
       <div className="card">
-        <h2 className="text-xl font-bold mb-4">Próximas Cirugías Confirmadas</h2>
+        <h2 className={`text-xl font-bold mb-4 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Próximas Cirugías Confirmadas</h2>
         <div className="space-y-3">
           {cirugiasConfirmadas.length === 0 ? (
             <p className={`text-center py-4 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-500'}`}>No hay cirugías confirmadas próximas</p>
@@ -336,16 +341,23 @@ export default function Dashboard() {
                       {cirugia.patients?.nombre} {cirugia.patients?.apellido}
                     </p>
                     <p className={`text-sm ${theme === 'dark' ? 'text-slate-200' : 'text-gray-600'}`}>
-                      {format(new Date(cirugia.fecha), 'dd/MM/yyyy')} - {cirugia.hora_inicio}
+                      {format(new Date(cirugia.fecha), 'dd/MM/yyyy')} - {typeof cirugia.hora_inicio === 'string' ? cirugia.hora_inicio.substring(0, 5) : cirugia.hora_inicio}
                     </p>
+                    {cirugia.estado_hora === 'reagendado' && cirugia.fecha_anterior && (
+                      <p className={`text-xs mt-0.5 ${theme === 'dark' ? 'text-amber-300' : 'text-amber-700'}`}>
+                        Fecha original (ya no aplica): {format(new Date(cirugia.fecha_anterior), 'dd/MM/yyyy')} a las {typeof cirugia.hora_inicio_anterior === 'string' ? cirugia.hora_inicio_anterior.substring(0, 5) : cirugia.hora_inicio_anterior}
+                      </p>
+                    )}
                     <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-500'}`}>
                       {cirugia.operating_rooms?.nombre}
                     </p>
                   </div>
                   <span className={`px-2 py-1 text-xs rounded ${
-                    theme === 'dark' ? 'bg-blue-900 text-blue-200' : 'bg-blue-100 text-blue-800'
+                    cirugia.estado_hora === 'reagendado'
+                      ? (theme === 'dark' ? 'bg-amber-900 text-amber-200' : 'bg-amber-100 text-amber-800')
+                      : (theme === 'dark' ? 'bg-blue-900 text-blue-200' : 'bg-blue-100 text-blue-800')
                   }`}>
-                    Programada
+                    {cirugia.estado_hora === 'reagendado' ? 'Reagendada' : 'Programada'}
                   </span>
                 </div>
               </div>

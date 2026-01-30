@@ -20,6 +20,8 @@ export default function Insumos() {
     nombre: '',
     codigo: '',
     grupo_prestacion: '',
+    proveedor: '',
+    grupos_fonasa: '',
     stock_actual: 0,
     stock_minimo: 10,
     unidad_medida: 'unidad',
@@ -88,6 +90,8 @@ export default function Insumos() {
         { key: 'codigo', label: 'Código' },
         { key: 'nombre', label: 'Nombre' },
         { key: 'grupo_prestacion', label: 'Grupo Prestación' },
+        { key: 'proveedor', label: 'Proveedor' },
+        { key: 'grupos_fonasa', label: 'Grupos Fonasa' },
         { key: 'stock_actual', label: 'Stock Actual' },
         { key: 'stock_minimo', label: 'Stock Mínimo' },
         { key: 'unidad_medida', label: 'Unidad' },
@@ -105,6 +109,8 @@ export default function Insumos() {
         { key: 'codigo', label: 'Código' },
         { key: 'nombre', label: 'Nombre' },
         { key: 'grupo_prestacion', label: 'Grupo Prestación' },
+        { key: 'proveedor', label: 'Proveedor' },
+        { key: 'grupos_fonasa', label: 'Grupos Fonasa' },
         { key: 'stock_actual', label: 'Stock Actual' },
         { key: 'stock_minimo', label: 'Stock Mínimo' },
         { key: 'unidad_medida', label: 'Unidad' },
@@ -127,7 +133,7 @@ export default function Insumos() {
     onSuccess: () => {
       queryClient.invalidateQueries(['insumos'])
       setMostrarFormulario(false)
-      setFormData({ nombre: '', codigo: '', grupo_prestacion: '' })
+      setFormData({ nombre: '', codigo: '', grupo_prestacion: '', proveedor: '', grupos_fonasa: '', stock_actual: 0, stock_minimo: 10, unidad_medida: 'unidad' })
       setCodigoError('')
       setCodigoTouched(false)
       showSuccess('Insumo creado exitosamente')
@@ -246,10 +252,15 @@ export default function Insumos() {
       return
     }
     
+    const payload = {
+      ...formData,
+      proveedor: (formData.proveedor || '').trim() || null,
+      grupos_fonasa: (formData.grupos_fonasa || '').trim() || null,
+    }
     if (insumoEditando) {
-      actualizarInsumo.mutate({ id: insumoEditando.id, data: formData })
+      actualizarInsumo.mutate({ id: insumoEditando.id, data: payload })
     } else {
-      crearInsumo.mutate(formData)
+      crearInsumo.mutate(payload)
     }
   }
 
@@ -271,6 +282,8 @@ export default function Insumos() {
       nombre: insumo.nombre,
       codigo: insumo.codigo,
       grupo_prestacion: insumo.grupo_prestacion,
+      proveedor: insumo.proveedor ?? '',
+      grupos_fonasa: insumo.grupos_fonasa ?? '',
       stock_actual: insumo.stock_actual ?? 0,
       stock_minimo: insumo.stock_minimo ?? 10,
       unidad_medida: insumo.unidad_medida ?? 'unidad',
@@ -323,6 +336,8 @@ export default function Insumos() {
                 nombre: '', 
                 codigo: '', 
                 grupo_prestacion: '',
+                proveedor: '',
+                grupos_fonasa: '',
                 stock_actual: 0,
                 stock_minimo: 10,
                 unidad_medida: 'unidad',
@@ -420,6 +435,31 @@ export default function Insumos() {
               />
             </div>
 
+            <div>
+              <label className="label-field">Proveedor (opcional)</label>
+              <input
+                type="text"
+                value={formData.proveedor}
+                onChange={(e) => setFormData({ ...formData, proveedor: sanitizeString(e.target.value) })}
+                className="input-field"
+                placeholder="Quien proveyó el item"
+              />
+            </div>
+
+            <div>
+              <label className="label-field">Grupos Fonasa (opcional)</label>
+              <input
+                type="text"
+                value={formData.grupos_fonasa}
+                onChange={(e) => setFormData({ ...formData, grupos_fonasa: sanitizeString(e.target.value) })}
+                className="input-field"
+                placeholder="Ej: 18,80 — Vacío = disponible para todas las cirugías"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Códigos de grupo Fonasa separados por coma (ej. 18=hernias, 80=neuro). Si está vacío, el médico puede elegir este insumo en cualquier cirugía.
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="label-field">Stock Actual *</label>
@@ -503,7 +543,9 @@ export default function Insumos() {
               <tr className={`border-b ${theme === 'dark' ? 'border-slate-700' : 'border-slate-200'}`}>
                 <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Nombre</th>
                 <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Código</th>
-                <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Grupo de Prestación</th>
+                <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Grupo Prestación</th>
+                <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Proveedor</th>
+                <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Grupos Fonasa</th>
                 <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Stock</th>
                 <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Estado</th>
                 <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Acciones</th>
@@ -512,11 +554,11 @@ export default function Insumos() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan="6" className={`text-center py-8 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'}`}>Cargando...</td>
+                  <td colSpan="8" className={`text-center py-8 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'}`}>Cargando...</td>
                 </tr>
               ) : insumos.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className={`text-center py-8 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-500'}`}>
+                  <td colSpan="8" className={`text-center py-8 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-500'}`}>
                     No se encontraron insumos
                   </td>
                 </tr>
@@ -539,6 +581,10 @@ export default function Insumos() {
                       <td className={`py-3 px-4 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{insumo.nombre}</td>
                       <td className={`py-3 px-4 font-mono ${theme === 'dark' ? 'text-slate-100' : 'text-gray-700'}`}>{insumo.codigo}</td>
                       <td className={`py-3 px-4 ${theme === 'dark' ? 'text-slate-100' : 'text-gray-700'}`}>{insumo.grupo_prestacion}</td>
+                      <td className={`py-3 px-4 ${theme === 'dark' ? 'text-slate-100' : 'text-gray-700'}`}>{insumo.proveedor || '—'}</td>
+                      <td className={`py-3 px-4 font-mono text-sm ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'}`} title={insumo.grupos_fonasa ? `Cirugías grupo(s): ${insumo.grupos_fonasa}` : 'Todas las cirugías'}>
+                        {insumo.grupos_fonasa || '—'}
+                      </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <Package className={`w-4 h-4 ${stockBajo ? (theme === 'dark' ? 'text-amber-400' : 'text-amber-600') : (theme === 'dark' ? 'text-slate-400' : 'text-gray-400')}`} />

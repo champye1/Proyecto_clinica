@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabase'
-import { CheckCircle2, XCircle, Clock, Eye, Calendar, X, User, Stethoscope, Package, FileText, CheckCircle, Activity, Filter, Lock, Search } from 'lucide-react'
+import { CheckCircle2, XCircle, Clock, Eye, Calendar, CalendarClock, X, User, Stethoscope, Package, FileText, CheckCircle, Activity, Filter, Lock, Search } from 'lucide-react'
 import { format } from 'date-fns'
 import { codigosOperaciones } from '../../data/codigosOperaciones'
 import { useNotifications } from '../../hooks/useNotifications'
@@ -403,6 +403,12 @@ export default function Solicitudes() {
     navigate('/pabellon/calendario')
   }
 
+  // Ir al calendario para reagendar (solicitud ya programada; el doctor pidió cambio de fecha/hora)
+  const handleReagendar = (solicitud) => {
+    sessionStorage.setItem('reagendar_solicitud_id', solicitud.id)
+    navigate('/pabellon/calendario', { state: { reagendar: true, surgeryRequestId: solicitud.id } })
+  }
+
   const handleProgramar = (e) => {
     e.preventDefault()
     if (solicitudProgramando) {
@@ -696,6 +702,15 @@ export default function Solicitudes() {
                     }`}>
                       {procedureName} • <span className={theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}>Dr. {solicitud.doctors?.apellido || solicitud.doctors?.nombre} {solicitud.doctors?.apellido}</span>
                     </div>
+                    {/* Aviso: el doctor pidió reagendamiento */}
+                    {solicitud.reagendamiento_notificado_at && (
+                      <div className={`mt-2 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 w-fit ${
+                        theme === 'dark' ? 'bg-amber-900/40 text-amber-200 border border-amber-700' : 'bg-amber-100 text-amber-900 border border-amber-200'
+                      }`}>
+                        <CalendarClock className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>El doctor solicitó reagendamiento ({format(new Date(solicitud.reagendamiento_notificado_at), 'dd/MM/yyyy HH:mm')})</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Lado derecho: Botones */}
@@ -715,6 +730,17 @@ export default function Solicitudes() {
                       <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
                     
+                    {/* Botón Reagendar: cuando el doctor pidió reagendamiento y la solicitud ya está aceptada/programada */}
+                    {solicitud.estado === 'aceptada' && solicitud.reagendamiento_notificado_at && (
+                      <button
+                        onClick={() => handleReagendar(solicitud)}
+                        className="bg-amber-500 hover:bg-amber-600 text-white px-4 sm:px-5 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-black text-[9px] sm:text-[10px] uppercase tracking-[0.15em] shadow-lg active:scale-95 transition-all touch-manipulation flex items-center gap-2"
+                        title="Cambiar fecha/hora de la cirugía"
+                      >
+                        <CalendarClock className="w-4 h-4" />
+                        REAGENDAR
+                      </button>
+                    )}
                     {/* Botón Gestionar Cupo */}
                     {solicitud.estado === 'pendiente' && (
                       <button

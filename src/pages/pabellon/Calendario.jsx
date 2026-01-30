@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../../config/supabase'
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, CheckCircle, CheckCircle2, Info, Lock, Activity, X, Stethoscope, XCircle, AlertTriangle, Search } from 'lucide-react'
 import { useNotifications } from '../../hooks/useNotifications'
@@ -915,7 +915,10 @@ const DayView = ({ day, pabellones, cirugias, bloqueos, onSlotSelect, selectedSl
 
 export default function Calendario() {
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
+  const fromReagendamientoNotification = location.state?.fromReagendamientoNotification === true
+  const isReagendarMode = location.state?.reagendar === true && (location.state?.surgeryRequestId || typeof sessionStorage !== 'undefined' && sessionStorage.getItem('reagendar_solicitud_id'))
   const { showSuccess, showError } = useNotifications()
   const [anio, setAnio] = useState(new Date().getFullYear())
   const [pabellonId, setPabellonId] = useState('todos')
@@ -934,8 +937,10 @@ export default function Calendario() {
   const [slotDetalle, setSlotDetalle] = useState(null)
   const [showConfirmCancelar, setShowConfirmCancelar] = useState(false)
   const [cirugiaACancelar, setCirugiaACancelar] = useState(null)
+  // Reagendamiento: cirugía existente a actualizar (cuando el doctor pidió reagendar)
+  const [cirugiaAReagendar, setCirugiaAReagendar] = useState(null)
   
-  // Obtener solicitud desde sessionStorage si existe
+  // Obtener solicitud desde sessionStorage si existe (programar) o null hasta cargar en modo reagendar
   const [currentRequest, setCurrentRequest] = useState(() => {
     try {
       const solicitudStr = sessionStorage.getItem('solicitud_gestionando')
@@ -970,6 +975,63 @@ export default function Calendario() {
       // ignorar errores de storage
     }
   }, [])
+
+  // Cargar cirugía y solicitud cuando se llega en modo reagendar (desde Solicitudes o notificación)
+  useEffect(() => {
+    if (!isReagendarMode) return
+    const requestId = location.state?.surgeryRequestId || sessionStorage.getItem('reagendar_solicitud_id')
+    if (!requestId) return
+
+    const loadReagendar = async () => {
+      try {
+        const { data: cirugia, error: errCirugia } = await supabase
+          .from('surgeries')
+          .select('id, surgery_request_id, fecha, hora_inicio, hora_fin, operating_room_id')
+          .eq('surgery_request_id', requestId)
+          .is('deleted_at', null)
+          .maybeSingle()
+
+        if (errCirugia) {
+          logger.errorWithContext('Error al cargar cirugía para reagendar', errCirugia)
+          showError('No se encontró la cirugía a reagendar.')
+          return
+        }
+        if (!cirugia) {
+          showError('No hay cirugía programada para esta solicitud.')
+          return
+        }
+
+        const { data: solicitud, error: errSol } = await supabase
+          .from('surgery_requests')
+          .select(`
+            *,
+            doctors:doctor_id(id, nombre, apellido, especialidad, estado),
+            patients:patient_id(nombre, apellido, rut)
+          `)
+          .eq('id', requestId)
+          .is('deleted_at', null)
+          .single()
+
+        if (errSol || !solicitud) {
+          logger.errorWithContext('Error al cargar solicitud para reagendar', errSol)
+          showError('No se pudo cargar la solicitud.')
+          return
+        }
+
+        setCirugiaAReagendar(cirugia)
+        setCurrentRequest(solicitud)
+        setView('day')
+        setSelectedDay(new Date(cirugia.fecha))
+        setSelectedMonth(new Date(cirugia.fecha).getMonth())
+        setAnio(new Date(cirugia.fecha).getFullYear())
+      } catch (e) {
+        logger.errorWithContext('Error en loadReagendar', e)
+        showError('Error al cargar datos para reagendar.')
+      }
+    }
+
+    loadReagendar()
+  }, [isReagendarMode, location.state?.surgeryRequestId])
   
   // Mutation para programar la cirugía usando función PostgreSQL atómica
   const programarCirugia = useMutation({
@@ -1082,6 +1144,57 @@ export default function Calendario() {
       showError(mensaje)
     },
   })
+
+  // Mutation para reagendar (actualizar fecha/hora de cirugía existente; el trigger notifica al doctor y pabellón)
+  const reagendarCirugia = useMutation({
+    mutationFn: async ({ cirugiaId, formData }) => {
+      let horaInicio = formData.hora_inicio
+      let horaFin = formData.hora_fin
+      if (horaInicio && horaInicio.match(/^\d{1,2}:\d{2}$/)) {
+        const [h, m] = horaInicio.split(':')
+        horaInicio = `${h.padStart(2, '0')}:${m.padStart(2, '0')}:00`
+      }
+      if (horaFin && horaFin.match(/^\d{1,2}:\d{2}$/)) {
+        const [h, m] = horaFin.split(':')
+        horaFin = `${h.padStart(2, '0')}:${m.padStart(2, '0')}:00`
+      }
+      const { error } = await supabase
+        .from('surgeries')
+        .update({
+          fecha: formData.fecha,
+          hora_inicio: horaInicio,
+          hora_fin: horaFin,
+          operating_room_id: formData.operating_room_id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', cirugiaId)
+
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['solicitudes'])
+      queryClient.invalidateQueries(['cirugias-hoy'])
+      queryClient.invalidateQueries(['cirugias-calendario'])
+      queryClient.invalidateQueries(['calendario-anual-cirugias'])
+      showSuccess('Cirugía reagendada. Se notificó al doctor y al pabellón.')
+      sessionStorage.removeItem('reagendar_solicitud_id')
+      setShowConfirmModal(false)
+      setSelectedSlot(null)
+      setCurrentRequest(null)
+      setCirugiaAReagendar(null)
+      navigate('/pabellon/solicitudes')
+    },
+    onError: (error) => {
+      const msg = error.message || error.toString()
+      if (msg.includes('solapamiento') || msg.includes('Ya existe')) {
+        showError('Ya existe una cirugía en ese horario. Elija otro slot.')
+      } else if (msg.includes('bloqueado')) {
+        showError('El horario está bloqueado.')
+      } else {
+        showError('Error al reagendar: ' + msg)
+      }
+    },
+  })
   
   // Función para manejar la confirmación del slot seleccionado
   const handleConfirmSlot = () => {
@@ -1096,29 +1209,32 @@ export default function Calendario() {
     }
   }
   
-  // Función para confirmar y programar la cirugía
+  // Función para confirmar y programar la cirugía (o reagendar si estamos en modo reagendar)
   const handleConfirmarCupo = () => {
-    if (selectedSlot && currentRequest && horaFin) {
-      // Validar que hora_fin > hora_inicio
-      const [horaInicioH, horaInicioM] = selectedSlot.time.split(':').map(Number)
-      const [horaFinH, horaFinM] = horaFin.split(':').map(Number)
-      const minutosInicio = horaInicioH * 60 + horaInicioM
-      const minutosFin = horaFinH * 60 + horaFinM
-      
-      if (minutosFin <= minutosInicio) {
-        showError('La hora de fin debe ser mayor que la hora de inicio')
-        return
-      }
-      
+    if (!selectedSlot || !currentRequest || !horaFin) return
+    const [horaInicioH, horaInicioM] = selectedSlot.time.split(':').map(Number)
+    const [horaFinH, horaFinM] = horaFin.split(':').map(Number)
+    const minutosInicio = horaInicioH * 60 + horaInicioM
+    const minutosFin = horaFinH * 60 + horaFinM
+    if (minutosFin <= minutosInicio) {
+      showError('La hora de fin debe ser mayor que la hora de inicio')
+      return
+    }
+
+    const formData = {
+      fecha: format(selectedSlot.date, 'yyyy-MM-dd'),
+      hora_inicio: selectedSlot.time,
+      hora_fin: horaFin,
+      operating_room_id: selectedSlot.pabellonId,
+      observaciones: '',
+    }
+
+    if (cirugiaAReagendar) {
+      reagendarCirugia.mutate({ cirugiaId: cirugiaAReagendar.id, formData })
+    } else {
       programarCirugia.mutate({
         solicitudId: currentRequest.id,
-        formData: {
-          fecha: format(selectedSlot.date, 'yyyy-MM-dd'),
-          hora_inicio: selectedSlot.time,
-          hora_fin: horaFin,
-          operating_room_id: selectedSlot.pabellonId,
-          observaciones: '',
-        }
+        formData,
       })
     }
   }
@@ -1405,6 +1521,28 @@ export default function Calendario() {
 
   return (
     <div className="space-y-3 sm:space-y-4 md:space-y-5 px-4 sm:px-5 md:px-6 lg:px-8 py-3 sm:py-4 md:py-5 lg:py-6 max-w-7xl mx-auto">
+      {/* Aviso cuando se llega por reagendamiento (notificación o botón Reagendar en Solicitudes) */}
+      {(fromReagendamientoNotification || (isReagendarMode && cirugiaAReagendar)) && (
+        <div className={`rounded-xl border px-4 py-3 flex items-center gap-3 ${
+          theme === 'dark' ? 'bg-amber-900/30 border-amber-700 text-amber-100' : 'bg-amber-50 border-amber-200 text-amber-900'
+        }`}>
+          <Clock className="w-5 h-5 flex-shrink-0 text-amber-600" />
+          <div className="flex-1">
+            <p className="font-semibold text-sm">Reagendamiento</p>
+            <p className="text-xs opacity-90 mt-0.5">
+              {cirugiaAReagendar ? 'Seleccione el nuevo horario en el calendario y confirme. Se notificará al doctor y al pabellón.' : 'Seleccione un nuevo horario en el calendario o vaya a Solicitudes.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/pabellon/solicitudes', { state: { surgeryRequestId: location.state?.surgeryRequestId } })}
+            className="text-xs font-bold underline hover:no-underline"
+          >
+            Ver Solicitudes
+          </button>
+        </div>
+      )}
+
       {/* Header General */}
       <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between mb-3 sm:mb-4 md:mb-5">
         <div>
@@ -1685,7 +1823,7 @@ export default function Calendario() {
         <Modal
           isOpen={showConfirmModal}
           onClose={() => setShowConfirmModal(false)}
-          title="Confirmar Agendamiento"
+          title={cirugiaAReagendar ? 'Confirmar Reagendamiento' : 'Confirmar Agendamiento'}
         >
           <div className="space-y-4 sm:space-y-5 md:space-y-6">
             {/* Resumen visual del agendamiento */}
@@ -1822,17 +1960,17 @@ export default function Calendario() {
                 variant="secondary"
                 onClick={() => setShowConfirmModal(false)}
                 className="flex-1 w-full sm:w-auto touch-manipulation"
-                disabled={programarCirugia.isPending}
+                disabled={programarCirugia.isPending || reagendarCirugia.isPending}
               >
                 Cancelar
               </Button>
               <Button
-                loading={programarCirugia.isPending}
+                loading={programarCirugia.isPending || reagendarCirugia.isPending}
                 onClick={handleConfirmarCupo}
-                disabled={!horaFin || programarCirugia.isPending}
+                disabled={!horaFin || programarCirugia.isPending || reagendarCirugia.isPending}
                 className="flex-1 w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white touch-manipulation"
               >
-                Confirmar Agendamiento
+                {cirugiaAReagendar ? 'Confirmar Reagendamiento' : 'Confirmar Agendamiento'}
               </Button>
             </div>
           </div>
