@@ -13,8 +13,7 @@ import {
   Menu,
   X,
   Sun,
-  Moon,
-  Stethoscope
+  Moon
 } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import Dashboard from '../pages/doctor/Dashboard'
@@ -41,7 +40,6 @@ export default function DoctorLayout() {
   const notificationsDropdownRef = useRef(null)
   const [userId, setUserId] = useState(null)
   const isDark = theme === 'dark'
-  const isMedical = theme === 'medical'
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -87,9 +85,8 @@ export default function DoctorLayout() {
   }
 
   const cycleTheme = () => {
-    if (theme === 'light') changeTheme('dark')
-    else if (theme === 'dark') changeTheme('medical')
-    else changeTheme('light')
+    if (theme === 'medical') changeTheme('light')
+    else changeTheme(theme === 'light' ? 'dark' : 'light')
   }
 
   const handleNotificationClick = (n) => {
@@ -103,7 +100,7 @@ export default function DoctorLayout() {
   }
 
   return (
-    <div className={`min-h-screen ${isDark ? 'bg-slate-900' : isMedical ? 'bg-slate-50' : 'bg-gray-50'}`}>
+    <div className={`min-h-screen ${isDark ? 'bg-slate-900' : 'bg-gray-50'}`}>
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div 
@@ -117,19 +114,18 @@ export default function DoctorLayout() {
         isDark ? 'bg-slate-800 border-r border-slate-700' : 'bg-white border-r border-slate-200'
       }`}>
         <div className={`p-6 border-b ${isDark ? 'border-slate-700' : 'border-slate-200'}`}>
-          <h2 className={`text-xl font-bold ${isDark ? 'text-blue-400' : 'text-primary-600'}`}>Doctor</h2>
+          <h2 className={`text-xl font-bold ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>Doctor</h2>
           <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>Panel Médico</p>
           <button
             onClick={cycleTheme}
             className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors w-full border ${
               isDark ? 'border-slate-600 bg-slate-700/50 hover:bg-slate-700 text-slate-200' : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
             }`}
-            title="Cambiar tema (Claro / Oscuro / Médico)"
+            title="Cambiar tema (Claro / Oscuro)"
           >
             {theme === 'light' && <Sun className="w-4 h-4" />}
             {theme === 'dark' && <Moon className="w-4 h-4" />}
-            {theme === 'medical' && <Stethoscope className="w-4 h-4" />}
-            <span>Tema: {theme === 'light' ? 'Claro' : theme === 'dark' ? 'Oscuro' : 'Médico'}</span>
+            <span>Tema: {theme === 'dark' ? 'Oscuro' : 'Claro'}</span>
           </button>
         </div>
         
@@ -143,7 +139,7 @@ export default function DoctorLayout() {
                 to={item.path}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                   isActive
-                    ? isDark ? 'bg-slate-700 text-white font-medium' : 'bg-primary-50 text-primary-700 font-medium'
+                    ? isDark ? 'bg-slate-700 text-white font-medium' : 'bg-blue-50 text-blue-700 font-medium'
                     : isDark ? 'text-slate-300 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-100'
                 }`}
               >
@@ -173,7 +169,7 @@ export default function DoctorLayout() {
       } ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className={`p-6 border-b flex items-center justify-between ${isDark ? 'border-slate-700' : 'border-slate-200'}`}>
           <div>
-            <h2 className={`text-xl font-bold ${isDark ? 'text-blue-400' : 'text-primary-600'}`}>Doctor</h2>
+            <h2 className={`text-xl font-bold ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>Doctor</h2>
             <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>Panel Médico</p>
           </div>
           <button 
@@ -196,7 +192,7 @@ export default function DoctorLayout() {
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                   isActive
-                    ? isDark ? 'bg-slate-700 text-white font-medium' : 'bg-primary-50 text-primary-700 font-medium'
+                    ? isDark ? 'bg-slate-700 text-white font-medium' : 'bg-blue-50 text-blue-700 font-medium'
                     : isDark ? 'text-slate-300 hover:bg-slate-700' : 'text-gray-700 hover:bg-gray-100'
                 }`}
               >
@@ -221,7 +217,7 @@ export default function DoctorLayout() {
       </aside>
 
       {/* Main Content */}
-      <main className={`lg:ml-64 min-h-screen ${isDark ? 'bg-slate-900' : isMedical ? 'bg-slate-50' : 'bg-gray-50'}`}>
+      <main className={`lg:ml-64 min-h-screen ${isDark ? 'bg-slate-900' : 'bg-gray-50'}`}>
         {/* Barra superior escritorio: botón Cambiar estilo siempre visible */}
         <div className={`hidden lg:flex items-center justify-end gap-3 px-6 py-3 border-b sticky top-0 z-30 ${
           isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'
@@ -235,12 +231,11 @@ export default function DoctorLayout() {
                 ? 'bg-slate-700 text-slate-100 hover:bg-slate-600 border border-slate-600'
                 : 'bg-blue-600 text-white hover:bg-blue-700 border border-blue-600'
             }`}
-            title="Cambiar tema (Claro / Oscuro / Médico)"
+            title="Cambiar tema (Claro / Oscuro)"
           >
             {theme === 'light' && <Sun className="w-4 h-4" />}
             {theme === 'dark' && <Moon className="w-4 h-4" />}
-            {theme === 'medical' && <Stethoscope className="w-4 h-4" />}
-            <span>{theme === 'light' ? 'Claro' : theme === 'dark' ? 'Oscuro' : 'Médico'}</span>
+            <span>{theme === 'dark' ? 'Oscuro' : 'Claro'}</span>
           </button>
         </div>
 
@@ -256,26 +251,25 @@ export default function DoctorLayout() {
             <Menu className="w-6 h-6" />
           </button>
           <div className="text-center flex-1">
-            <h2 className={`text-lg font-bold ${isDark ? 'text-blue-400' : 'text-primary-600'}`}>Doctor</h2>
+            <h2 className={`text-lg font-bold ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>Doctor</h2>
             <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>Panel Médico</p>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={cycleTheme}
               className={`p-2 rounded-lg ${isDark ? 'hover:bg-slate-700 text-slate-300' : 'hover:bg-gray-100 text-gray-600'}`}
-              title="Cambiar tema"
+              title="Cambiar tema (Claro / Oscuro)"
               aria-label="Cambiar tema"
             >
               {theme === 'light' && <Sun className="w-5 h-5" />}
               {theme === 'dark' && <Moon className="w-5 h-5" />}
-              {theme === 'medical' && <Stethoscope className="w-5 h-5" />}
             </button>
             <div className="relative" ref={notificationsDropdownRef}>
               <button
                 type="button"
                 onClick={() => setShowNotificationsDropdown((v) => !v)}
                 className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all relative ${
-                  isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-600 hover:text-primary-600 hover:bg-primary-50'
+                  isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-600 hover:text-blue-600 hover:bg-blue-50'
                 }`}
                 title="Notificaciones"
                 aria-label="Notificaciones"

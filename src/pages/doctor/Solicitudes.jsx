@@ -4,6 +4,7 @@ import { supabase } from '../../config/supabase'
 import { Clock, CheckCircle2, XCircle, Edit, X, Package, CalendarClock } from 'lucide-react'
 import { format } from 'date-fns'
 import { useNotifications } from '../../hooks/useNotifications'
+import { useTheme } from '../../contexts/ThemeContext'
 import { sanitizeString, sanitizeNumber } from '../../utils/sanitizeInput'
 import Pagination from '../../components/common/Pagination'
 import Modal from '../../components/common/Modal'
@@ -13,7 +14,9 @@ import { codigosOperaciones, getGrupoFonasaByCodigo, insumoAplicaParaGrupo } fro
 
 export default function Solicitudes() {
   const queryClient = useQueryClient()
+  const { theme } = useTheme()
   const { showSuccess, showError } = useNotifications()
+  const isDark = theme === 'dark'
   const [filtroEstado, setFiltroEstado] = useState('todas')
   const [solicitudEditando, setSolicitudEditando] = useState(null)
   const [formEdicion, setFormEdicion] = useState({
@@ -334,11 +337,11 @@ export default function Solicitudes() {
               <div key={solicitud.id} className="card">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h3 className="text-lg font-bold">
+                    <h3 className={`text-lg font-bold ${isDark ? 'text-white' : ''}`}>
                       {solicitud.patients?.nombre} {solicitud.patients?.apellido}
                     </h3>
-                    <p className="text-sm text-gray-600">RUT: {solicitud.patients?.rut}</p>
-                    <p className="text-sm text-gray-600 mt-1">
+                    <p className={`text-sm ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>RUT: {solicitud.patients?.rut}</p>
+                    <p className={`text-sm mt-1 ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
                       Código Operación: {solicitud.codigo_operacion}
                     </p>
                   </div>
@@ -376,24 +379,31 @@ export default function Solicitudes() {
 
                 {solicitud.hora_recomendada && (
                   <div className="mb-2">
-                    <span className="text-sm font-medium">Hora Recomendada: </span>
-                    <span className="text-sm text-gray-600">{solicitud.hora_recomendada}</span>
+                    <span className={`text-sm font-medium ${isDark ? 'text-slate-300' : ''}`}>Hora Recomendada: </span>
+                    <span className={`text-sm ${isDark ? 'text-slate-200' : 'text-gray-600'}`}>{solicitud.hora_recomendada}</span>
                   </div>
                 )}
 
                 {solicitud.observaciones && (
                   <div className="mb-2">
-                    <span className="text-sm font-medium">Observaciones: </span>
-                    <span className="text-sm text-gray-600">{solicitud.observaciones}</span>
+                    <span className={`text-sm font-medium ${isDark ? 'text-slate-300' : ''}`}>Observaciones: </span>
+                    <span className={`text-sm ${isDark ? 'text-slate-200' : 'text-gray-600'}`}>{solicitud.observaciones}</span>
                   </div>
                 )}
 
                 {solicitud.surgery_request_supplies && solicitud.surgery_request_supplies.length > 0 && (
                   <div className="mb-2">
-                    <span className="text-sm font-medium">Insumos: </span>
+                    <span className={`text-sm font-medium ${isDark ? 'text-slate-300' : ''}`}>Insumos: </span>
                     <div className="mt-1 flex flex-wrap gap-2">
                       {solicitud.surgery_request_supplies.map((item, idx) => (
-                        <span key={idx} className="text-xs bg-gray-100 px-2 py-1 rounded">
+                        <span
+                          key={idx}
+                          className={`text-xs px-2 py-1 rounded border ${
+                            isDark
+                              ? 'bg-slate-600/90 text-slate-100 border-slate-500'
+                              : 'bg-gray-100 text-gray-800 border-gray-200'
+                          }`}
+                        >
                           {item.supplies?.nombre} (x{item.cantidad})
                         </span>
                       ))}
@@ -419,7 +429,7 @@ export default function Solicitudes() {
                 )}
 
                 <div className="mt-4 flex items-center justify-between">
-                  <div className="text-xs text-gray-500">
+                  <div className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
                     Creada el {format(new Date(solicitud.created_at), 'dd/MM/yyyy HH:mm')}
                   </div>
                   {solicitud.estado === 'pendiente' && (
