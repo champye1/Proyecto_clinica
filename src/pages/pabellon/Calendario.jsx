@@ -1626,7 +1626,7 @@ export default function Calendario() {
             </span>
             <select
               value={pabellonId}
-              onChange={(e) => setPabellonId(e.target.value)}
+              onChange={(e) => setPabellonId(sanitizeString(e.target.value))}
               className="bg-transparent text-sm sm:text-base font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 rounded-xl px-2 py-1.5 sm:py-1 flex-1 sm:flex-none min-w-0"
               aria-label="Filtrar por pabellón"
             >

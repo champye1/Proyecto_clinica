@@ -4,7 +4,7 @@ import { supabase } from '../../config/supabase'
 import { Clock, CheckCircle2, XCircle, Edit, X, Package, CalendarClock } from 'lucide-react'
 import { format } from 'date-fns'
 import { useNotifications } from '../../hooks/useNotifications'
-import { sanitizeString } from '../../utils/sanitizeInput'
+import { sanitizeString, sanitizeNumber } from '../../utils/sanitizeInput'
 import Pagination from '../../components/common/Pagination'
 import Modal from '../../components/common/Modal'
 import Button from '../../components/common/Button'
@@ -309,7 +309,7 @@ export default function Solicitudes() {
         <h1 className="text-3xl font-bold text-gray-900">Mis Solicitudes</h1>
         <select
           value={filtroEstado}
-          onChange={(e) => setFiltroEstado(e.target.value)}
+          onChange={(e) => setFiltroEstado(sanitizeString(e.target.value))}
           className="input-field w-auto"
         >
           <option value="todas">Todas</option>
@@ -525,7 +525,7 @@ export default function Solicitudes() {
                 <input
                   type="number"
                   value={cantidadInsumo}
-                  onChange={(e) => setCantidadInsumo(parseInt(e.target.value) || 1)}
+                  onChange={(e) => setCantidadInsumo(parseInt(sanitizeNumber(e.target.value)) || 1)}
                   className="input-field w-24"
                   min="1"
                   placeholder="Cant."

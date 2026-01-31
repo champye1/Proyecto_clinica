@@ -371,7 +371,7 @@ export default function Insumos() {
           </div>
           <select
             value={filtroTipo}
-            onChange={(e) => setFiltroTipo(e.target.value)}
+            onChange={(e) => setFiltroTipo(sanitizeString(e.target.value))}
             className="input-field w-auto"
           >
             <option value="nombre">Por Nombre</option>
@@ -467,7 +467,7 @@ export default function Insumos() {
                   type="number"
                   min="0"
                   value={formData.stock_actual}
-                  onChange={(e) => setFormData({ ...formData, stock_actual: parseInt(e.target.value) || 0 })}
+                  onChange={(e) => setFormData({ ...formData, stock_actual: parseInt(sanitizeNumber(e.target.value)) || 0 })}
                   className="input-field"
                   required
                 />
@@ -479,7 +479,7 @@ export default function Insumos() {
                   type="number"
                   min="0"
                   value={formData.stock_minimo}
-                  onChange={(e) => setFormData({ ...formData, stock_minimo: parseInt(e.target.value) || 0 })}
+                  onChange={(e) => setFormData({ ...formData, stock_minimo: parseInt(sanitizeNumber(e.target.value)) || 0 })}
                   className="input-field"
                   required
                 />
@@ -489,7 +489,7 @@ export default function Insumos() {
                 <label className="label-field">Unidad de Medida *</label>
                 <select
                   value={formData.unidad_medida}
-                  onChange={(e) => setFormData({ ...formData, unidad_medida: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, unidad_medida: sanitizeString(e.target.value) })}
                   className="input-field"
                   required
                 >

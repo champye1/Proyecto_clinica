@@ -622,7 +622,7 @@ export default function Dashboard() {
               <span className="text-[9px] sm:text-[10px] font-black uppercase text-slate-400">Pabellón</span>
               <select
                 value={filtroPabellon}
-                onChange={(e) => setFiltroPabellon(e.target.value)}
+                onChange={(e) => setFiltroPabellon(sanitizeString(e.target.value))}
                 className="text-[10px] sm:text-xs font-bold border border-slate-200 rounded-full px-2.5 py-1 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="todos">Todos</option>

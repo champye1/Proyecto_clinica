@@ -346,7 +346,7 @@ export default function BloqueoHorario() {
               <label className="label-field">Doctor (Opcional)</label>
               <select
                 value={formData.doctor_id}
-                onChange={(e) => setFormData({ ...formData, doctor_id: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, doctor_id: sanitizeString(e.target.value) })}
                 className="input-field"
               >
                 <option value="">Seleccionar doctor...</option>
@@ -362,7 +362,7 @@ export default function BloqueoHorario() {
               <label className="label-field">Pabellón *</label>
               <select
                 value={formData.operating_room_id}
-                onChange={(e) => setFormData({ ...formData, operating_room_id: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, operating_room_id: sanitizeString(e.target.value) })}
                 className="input-field"
                 required
               >
@@ -380,7 +380,7 @@ export default function BloqueoHorario() {
               <input
                 type="date"
                 value={formData.fecha}
-                onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, fecha: sanitizeString(e.target.value) })}
                 className="input-field"
                 required
                 min={new Date().toISOString().split('T')[0]}
@@ -393,7 +393,7 @@ export default function BloqueoHorario() {
                 <input
                   type="time"
                   value={formData.hora_inicio}
-                  onChange={(e) => setFormData({ ...formData, hora_inicio: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, hora_inicio: sanitizeString(e.target.value) })}
                   className="input-field"
                   required
                 />
@@ -403,7 +403,7 @@ export default function BloqueoHorario() {
                 <input
                   type="time"
                   value={formData.hora_fin}
-                  onChange={(e) => setFormData({ ...formData, hora_fin: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, hora_fin: sanitizeString(e.target.value) })}
                   className="input-field"
                   required
                 />
@@ -429,7 +429,7 @@ export default function BloqueoHorario() {
               <input
                 type="date"
                 value={formData.vigencia_hasta}
-                onChange={(e) => setFormData({ ...formData, vigencia_hasta: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, vigencia_hasta: sanitizeString(e.target.value) })}
                 className="input-field"
                 min={formData.fecha}
               />

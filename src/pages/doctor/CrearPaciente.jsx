@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../config/supabase'
 import { UserPlus, Package, AlertCircle, Ban } from 'lucide-react'
 import { formatRut, cleanRut, validateRut, isValidRutFormat } from '../../utils/rutFormatter'
-import { sanitizeString, sanitizeRut } from '../../utils/sanitizeInput'
+import { sanitizeString, sanitizeRut, sanitizeNumber } from '../../utils/sanitizeInput'
 import SearchableSelect from '../../components/SearchableSelect'
 import { codigosOperaciones, getGrupoFonasaByCodigo, insumoAplicaParaGrupo } from '../../data/codigosOperaciones'
 import { useNotifications } from '../../hooks/useNotifications'
@@ -482,7 +482,7 @@ export default function CrearPaciente() {
               <input
                 type="number"
                 value={cantidadInsumo}
-                onChange={(e) => setCantidadInsumo(parseInt(e.target.value) || 1)}
+                onChange={(e) => setCantidadInsumo(parseInt(sanitizeNumber(e.target.value)) || 1)}
                 className="input-field w-24"
                 min="1"
                 placeholder="Cant."

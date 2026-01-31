@@ -199,7 +199,7 @@ export default function Auditoria() {
               <select
                 value={filtroTabla}
                 onChange={(e) => {
-                  setFiltroTabla(e.target.value)
+                  setFiltroTabla(sanitizeString(e.target.value))
                   setCurrentPage(1)
                 }}
                 className="input-field"
@@ -216,7 +216,7 @@ export default function Auditoria() {
               <select
                 value={filtroAccion}
                 onChange={(e) => {
-                  setFiltroAccion(e.target.value)
+                  setFiltroAccion(sanitizeString(e.target.value))
                   setCurrentPage(1)
                 }}
                 className="input-field"
@@ -234,7 +234,7 @@ export default function Auditoria() {
                 type="date"
                 value={fechaDesde}
                 onChange={(e) => {
-                  setFechaDesde(e.target.value)
+                  setFechaDesde(sanitizeString(e.target.value))
                   setCurrentPage(1)
                 }}
                 className="input-field"
@@ -247,7 +247,7 @@ export default function Auditoria() {
                 type="date"
                 value={fechaHasta}
                 onChange={(e) => {
-                  setFechaHasta(e.target.value)
+                  setFechaHasta(sanitizeString(e.target.value))
                   setCurrentPage(1)
                 }}
                 className="input-field"

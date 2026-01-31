@@ -4,7 +4,7 @@ import { supabase } from '../../config/supabase'
 import { Plus, Edit, Trash2, CheckCircle2, XCircle, Globe, Key, Eye, EyeOff, Search, Download, FileSpreadsheet } from 'lucide-react'
 import { formatRut, cleanRut, validateRut } from '../../utils/rutFormatter'
 import { useNotifications } from '../../hooks/useNotifications'
-import { sanitizeString, sanitizeEmail, sanitizeCode } from '../../utils/sanitizeInput'
+import { sanitizeString, sanitizeEmail, sanitizeCode, sanitizeRut, sanitizePassword } from '../../utils/sanitizeInput'
 import { logger } from '../../utils/logger'
 import { useDebounce } from '../../hooks/useDebounce'
 import { handleMutationError } from '../../utils/errorHandler'
@@ -634,7 +634,7 @@ export default function Medicos() {
               <label className="label-field text-sm">Filtrar por Especialidad</label>
               <select
                 value={filtroEspecialidad}
-                onChange={(e) => setFiltroEspecialidad(e.target.value)}
+                onChange={(e) => setFiltroEspecialidad(sanitizeString(e.target.value))}
                 className="input-field"
               >
                 <option value="">Todas las especialidades</option>
@@ -649,7 +649,7 @@ export default function Medicos() {
               <label className="label-field text-sm">Filtrar por Estado</label>
               <select
                 value={filtroEstado}
-                onChange={(e) => setFiltroEstado(e.target.value)}
+                onChange={(e) => setFiltroEstado(sanitizeString(e.target.value))}
                 className="input-field"
               >
                 <option value="">Todos los estados</option>
@@ -702,7 +702,8 @@ export default function Medicos() {
                   type="text"
                   value={formData.rut}
                   onChange={(e) => {
-                    const formatted = formatRut(e.target.value)
+                    const sanitized = sanitizeRut(e.target.value)
+                    const formatted = formatRut(sanitized)
                     handleFieldChange('rut', formatted)
                   }}
                   onBlur={() => handleFieldBlur('rut')}
@@ -753,7 +754,7 @@ export default function Medicos() {
                 <label className="label-field">Estado *</label>
                 <select
                   value={formData.estado}
-                  onChange={(e) => setFormData({ ...formData, estado: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, estado: sanitizeString(e.target.value) })}
                   className="input-field"
                   required
                 >
@@ -813,7 +814,7 @@ export default function Medicos() {
                       <input
                         type={showPassword ? 'text' : 'password'}
                         value={formData.password}
-                        onChange={(e) => handleFieldChange('password', e.target.value)}
+                        onChange={(e) => handleFieldChange('password', sanitizePassword(e.target.value))}
                         onBlur={() => handleFieldBlur('password')}
                         className={`input-field pr-12 ${fieldErrors.password ? 'border-red-500' : ''}`}
                         placeholder="Ingrese contraseña o use la generada"

@@ -187,3 +187,16 @@ export function sanitizeCode(input) {
   // Solo permite letras, números y guiones
   return input.replace(/[^a-zA-Z0-9-]/g, '')
 }
+
+/**
+ * Sanitiza un campo de contraseña: solo elimina scripts e inyecciones,
+ * sin escapar caracteres especiales (para no alterar la contraseña).
+ * @param {string} input - String a sanitizar
+ * @returns {string} - String sanitizado para contraseña
+ */
+export function sanitizePassword(input) {
+  if (typeof input !== 'string') {
+    return input
+  }
+  return sanitizeString(input, { allowHTML: true, trim: false })
+}

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabase'
 import { Mail, Lock, AlertCircle, Building2, ArrowLeft, Stethoscope } from 'lucide-react'
-import { sanitizeEmail } from '../../utils/sanitizeInput'
+import { sanitizeEmail, sanitizePassword } from '../../utils/sanitizeInput'
 import { 
   isLocked, 
   recordFailedAttempt, 
@@ -188,7 +188,7 @@ export default function LoginPabellon() {
                 id="password"
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => setPassword(sanitizePassword(e.target.value))}
                 className="w-full bg-slate-50 border-2 border-slate-50 rounded-xl sm:rounded-2xl py-3 sm:py-4 pl-10 sm:pl-12 pr-3 sm:pr-4 focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-sm sm:text-base text-slate-700 touch-manipulation"
                 placeholder="••••••••"
                 required

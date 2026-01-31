@@ -532,7 +532,7 @@ export default function Solicitudes() {
             </label>
             <select
               value={filtroDoctor}
-              onChange={(e) => setFiltroDoctor(e.target.value)}
+              onChange={(e) => setFiltroDoctor(sanitizeString(e.target.value))}
               className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 border-2 rounded-lg sm:rounded-xl focus:border-blue-500 focus:outline-none font-bold text-sm sm:text-base touch-manipulation ${
                 theme === 'dark'
                   ? 'bg-slate-800 border-slate-700 text-white'
@@ -558,7 +558,7 @@ export default function Solicitudes() {
             </label>
             <select
               value={filtroCodigoOperacion}
-              onChange={(e) => setFiltroCodigoOperacion(e.target.value)}
+              onChange={(e) => setFiltroCodigoOperacion(sanitizeString(e.target.value))}
               className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 border-2 rounded-lg sm:rounded-xl focus:border-blue-500 focus:outline-none font-bold text-sm sm:text-base touch-manipulation ${
                 theme === 'dark'
                   ? 'bg-slate-800 border-slate-700 text-white'
@@ -587,7 +587,7 @@ export default function Solicitudes() {
             </label>
             <select
               value={filtroEstado}
-              onChange={(e) => setFiltroEstado(e.target.value)}
+              onChange={(e) => setFiltroEstado(sanitizeString(e.target.value))}
               className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 border-2 rounded-lg sm:rounded-xl focus:border-blue-500 focus:outline-none font-bold text-sm sm:text-base touch-manipulation ${
                 theme === 'dark'
                   ? 'bg-slate-800 border-slate-700 text-white'
@@ -1017,7 +1017,7 @@ export default function Solicitudes() {
                   <input
                     type="date"
                     value={formProgramacion.fecha}
-                    onChange={(e) => setFormProgramacion({ ...formProgramacion, fecha: e.target.value })}
+                    onChange={(e) => setFormProgramacion({ ...formProgramacion, fecha: sanitizeString(e.target.value) })}
                     className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl py-3.5 px-5 focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-slate-700"
                     required
                     min={format(new Date(), 'yyyy-MM-dd')}
@@ -1042,7 +1042,7 @@ export default function Solicitudes() {
                           return
                         }
                       }
-                      setFormProgramacion({ ...formProgramacion, hora_fin: nuevaHoraFin })
+                      setFormProgramacion({ ...formProgramacion, hora_fin: sanitizeString(nuevaHoraFin) })
                     }}
                     min={formProgramacion.hora_inicio || undefined}
                     className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl py-3.5 px-5 focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-slate-700"
@@ -1312,7 +1312,7 @@ export default function Solicitudes() {
                   </label>
                   <select
                     value={formProgramacion.operating_room_id}
-                    onChange={(e) => setFormProgramacion({ ...formProgramacion, operating_room_id: e.target.value })}
+                    onChange={(e) => setFormProgramacion({ ...formProgramacion, operating_room_id: sanitizeString(e.target.value) })}
                     className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl py-3.5 px-5 focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-slate-700"
                     required
                   >
