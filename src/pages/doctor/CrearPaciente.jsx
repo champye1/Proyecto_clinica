@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../config/supabase'
 import { UserPlus, Package, AlertCircle, Ban } from 'lucide-react'
@@ -63,12 +63,61 @@ export default function CrearPaciente() {
     },
   })
 
-  // Insumos filtrados por grupo Fonasa de la cirugía seleccionada (ej. mallas solo en hernias, no en neuro)
+  // Pack e insumos recomendados para el código de operación seleccionado (tabla operation_supply_packs)
+  const { data: packData } = useQuery({
+    queryKey: ['operation-pack', formData.codigo_operacion],
+    queryFn: async () => {
+      if (!formData.codigo_operacion) return { packItems: [], recommendedSupplyIds: [] }
+      const { data: rows, error } = await supabase
+        .from('operation_supply_packs')
+        .select('supply_id, cantidad, supplies(id, nombre, codigo)')
+        .eq('codigo_operacion', formData.codigo_operacion)
+      if (error) throw error
+      const packItems = (rows || [])
+        .filter(r => r.supplies)
+        .map(r => ({
+          supply_id: r.supply_id,
+          nombre: r.supplies.nombre,
+          codigo: r.supplies.codigo,
+          cantidad: Math.max(0, Number(r.cantidad) || 0),
+        }))
+      const recommendedSupplyIds = packItems.map(p => p.supply_id)
+      return { packItems, recommendedSupplyIds }
+    },
+    enabled: !!formData.codigo_operacion,
+  })
+
+  // Al cambiar el código de operación: reemplazar insumos solo por el pack del código actual (no mezclar con el anterior)
+  const lastAppliedPackCodeRef = useRef(null)
+  useEffect(() => {
+    if (!formData.codigo_operacion) {
+      lastAppliedPackCodeRef.current = null
+      return
+    }
+    if (!packData?.packItems || lastAppliedPackCodeRef.current === formData.codigo_operacion) return
+    const packInsumos = packData.packItems
+      .filter(p => p.cantidad >= 1)
+      .map(p => ({ supply_id: p.supply_id, nombre: p.nombre, codigo: p.codigo, cantidad: p.cantidad }))
+    lastAppliedPackCodeRef.current = formData.codigo_operacion
+    setFormData(prev => ({ ...prev, insumos: packInsumos }))
+  }, [formData.codigo_operacion, packData?.packItems])
+
+  // Insumos filtrados por grupo Fonasa; ordenados con recomendados para esta operación primero
   const grupoFonasa = getGrupoFonasaByCodigo(formData.codigo_operacion)
   const insumosDisponibles = useMemo(() => {
-    if (!grupoFonasa) return insumos
-    return insumos.filter(ins => insumoAplicaParaGrupo(ins.grupos_fonasa, grupoFonasa))
-  }, [insumos, grupoFonasa])
+    let list = grupoFonasa
+      ? insumos.filter(ins => insumoAplicaParaGrupo(ins.grupos_fonasa, grupoFonasa))
+      : insumos
+    const recommendedIds = packData?.recommendedSupplyIds || []
+    if (recommendedIds.length === 0) return list
+    return [...list].sort((a, b) => {
+      const aRec = recommendedIds.includes(a.id)
+      const bRec = recommendedIds.includes(b.id)
+      if (aRec && !bRec) return -1
+      if (!aRec && bRec) return 1
+      return 0
+    })
+  }, [insumos, grupoFonasa, packData?.recommendedSupplyIds])
 
   useEffect(() => {
     if (insumoSeleccionado && !insumosDisponibles.some(i => i.id === insumoSeleccionado)) {
@@ -468,6 +517,11 @@ export default function CrearPaciente() {
               <Package className="w-5 h-5" />
               Insumos Requeridos
             </h2>
+            {formData.codigo_operacion && (packData?.packItems?.length > 0) && (
+              <p className={`text-xs mb-3 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                Los insumos del pack para esta operación se han añadido automáticamente. Los recomendados aparecen primero en la lista.
+              </p>
+            )}
             <div className="flex gap-2 mb-4">
               <div className="flex-1">
                 <SearchableSelect
@@ -498,16 +552,28 @@ export default function CrearPaciente() {
             </div>
 
             {formData.insumos.length > 0 && (
-              <div className="border rounded-lg p-4 space-y-2">
+              <div className={`border rounded-lg p-4 space-y-2 ${
+                theme === 'dark' ? 'border-slate-600 bg-slate-800/50' : 'border-slate-200'
+              }`}>
                 {formData.insumos.map((insumo, index) => (
-                  <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                    <span>
+                  <div
+                    key={index}
+                    className={`flex justify-between items-center p-3 rounded-lg ${
+                      theme === 'dark'
+                        ? 'bg-slate-700 text-slate-100'
+                        : 'bg-gray-50 text-gray-900'
+                    }`}
+                  >
+                    <span className="font-medium">
                       {insumo.nombre} ({insumo.codigo}) - Cantidad: {insumo.cantidad}
                     </span>
                     <button
                       type="button"
                       onClick={() => eliminarInsumo(index)}
-                      className="text-red-600 hover:text-red-800"
+                      className={theme === 'dark'
+                        ? 'text-red-400 hover:text-red-300 font-semibold'
+                        : 'text-red-600 hover:text-red-800 font-semibold'
+                      }
                     >
                       Eliminar
                     </button>

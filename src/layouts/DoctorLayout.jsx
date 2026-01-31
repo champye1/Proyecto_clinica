@@ -116,17 +116,6 @@ export default function DoctorLayout() {
         <div className={`p-6 border-b ${isDark ? 'border-slate-700' : 'border-slate-200'}`}>
           <h2 className={`text-xl font-bold ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>Doctor</h2>
           <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>Panel Médico</p>
-          <button
-            onClick={cycleTheme}
-            className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors w-full border ${
-              isDark ? 'border-slate-600 bg-slate-700/50 hover:bg-slate-700 text-slate-200' : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
-            }`}
-            title="Cambiar tema (Claro / Oscuro)"
-          >
-            {theme === 'light' && <Sun className="w-4 h-4" />}
-            {theme === 'dark' && <Moon className="w-4 h-4" />}
-            <span>Tema: {theme === 'dark' ? 'Oscuro' : 'Claro'}</span>
-          </button>
         </div>
         
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">

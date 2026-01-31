@@ -1,12 +1,21 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { supabase } from './config/supabase'
+import { logger } from './utils/logger'
 import Inicio from './pages/auth/Inicio'
 import LoginPabellon from './pages/auth/LoginPabellon'
 import LoginDoctor from './pages/auth/LoginDoctor'
 import PabellonLayout from './layouts/PabellonLayout'
 import DoctorLayout from './layouts/DoctorLayout'
 import LoadingSpinner from './components/common/LoadingSpinner'
+
+// Detecta si el error es por token de refresco inválido (sesión antigua/revocada)
+function isInvalidRefreshTokenError(error) {
+  if (!error) return false
+  const msg = (error.message || '').toLowerCase()
+  const name = (error.name || '').toLowerCase()
+  return name === 'authapierror' || msg.includes('refresh token') || msg.includes('refresh_token')
+}
 
 function AppContent() {
   const location = useLocation()
@@ -15,16 +24,27 @@ function AppContent() {
   const [userRole, setUserRole] = useState(null)
 
   useEffect(() => {
-    // Verificar sesión inicial
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        fetchUserRole(session.user.id)
-      } else {
+    // Verificar sesión inicial; si hay token de refresco inválido, limpiar sesión
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        setUser(session?.user ?? null)
+        if (session?.user) {
+          fetchUserRole(session.user.id)
+        } else {
+          setUserRole(null)
+          setLoading(false)
+        }
+      })
+      .catch(async (err) => {
+        if (isInvalidRefreshTokenError(err)) {
+          logger.warn('Token de refresco inválido o no encontrado. Limpiando sesión.')
+          await supabase.auth.signOut()
+        }
+        setUser(null)
         setUserRole(null)
         setLoading(false)
-      }
-    })
+      })
 
     // Escuchar cambios de autenticación
     const {
