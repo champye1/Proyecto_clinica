@@ -195,19 +195,31 @@ serve(async (req) => {
 
     const userId = authData.user.id
 
-    // Crear registro en users (incluir username si se proporciona)
+    // Crear registro en users (la tabla users tiene: id, email, role)
     const { error: insertUserError } = await supabaseAdmin
       .from('users')
       .insert({
         id: userId,
         email: email.toLowerCase().trim(),
         role: 'doctor',
-        username: acceso_web_enabled && username ? username.toLowerCase().trim() : null,
       })
 
-    if (insertUserError && insertUserError.code !== '23505') {
+    if (insertUserError) {
       await supabaseAdmin.auth.admin.deleteUser(userId)
       console.error('Error al crear registro en users:', insertUserError)
+      // 23505 = unique violation: el email o id ya existe (ej. médico ya registrado con ese correo)
+      if (insertUserError.code === '23505') {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'El correo electrónico ya está registrado. Usa otro correo para este médico.'
+          }),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200,
+          },
+        )
+      }
       return new Response(
         JSON.stringify({
           success: false,

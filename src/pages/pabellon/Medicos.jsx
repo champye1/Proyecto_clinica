@@ -304,6 +304,7 @@ export default function Medicos() {
         return // Error ya manejado
       }
       
+      const errorMessage = error?.message || error?.toString() || 'Error desconocido'
       showError(`Error al crear médico: ${errorMessage}`)
     },
   })
