@@ -98,22 +98,18 @@ export const validateRut = (rut) => {
     multiplier = multiplier === 7 ? 2 : multiplier + 1
   }
   
-  // Calcular el resto de la división por 11
-  const remainder = sum % 11
-  
-  // Calcular el dígito verificador esperado
+  // Calcular el dígito verificador según algoritmo oficial chileno (módulo 11)
+  // DV = 11 - (sum % 11). Si resultado es 11 → DV es 0; si es 10 → DV es K
+  const resto = sum % 11
+  const resultado = 11 - resto
   let calculatedDv
-  if (remainder < 2) {
-    calculatedDv = remainder.toString()
+  if (resultado === 11) {
+    calculatedDv = '0'
+  } else if (resultado === 10) {
+    calculatedDv = 'K'
   } else {
-    calculatedDv = (11 - remainder).toString()
+    calculatedDv = resultado.toString()
   }
   
-  // Si el resultado es 10, el dígito verificador debe ser K
-  if (calculatedDv === '10') {
-    return dv === 'K'
-  }
-  
-  // Comparar el dígito verificador calculado con el ingresado
   return calculatedDv === dv
 }
