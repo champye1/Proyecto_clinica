@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabase'
 import { 
   Clock, 
-  Calendar, 
   Activity, 
   Bed, 
   AlertCircle,
@@ -18,7 +17,6 @@ import {
   ClipboardList,
   ArrowRight,
   MessageSquare,
-  Package,
   BarChart3,
   Timer
 } from 'lucide-react'
@@ -417,17 +415,17 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* Métricas principales */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8 lg:mb-10">
+      {/* Métricas principales (3 tarjetas) */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8 lg:mb-10">
         {isLoadingOcupacion || isLoadingSolicitudes ? (
-          Array.from({ length: 4 }).map((_, i) => (
+          Array.from({ length: 3 }).map((_, i) => (
             <MetricSkeleton key={i} />
           ))
         ) : (
           [
             { 
               id: 'pendientes',
-              label: 'Pendientes',
+              label: 'Solicitudes pendientes',
               value: solicitudesPendientes.length.toString(),
               icon: Inbox,
               color: theme === 'dark' ? 'text-blue-400' : 'text-blue-600',
@@ -462,23 +460,6 @@ export default function Dashboard() {
                 navigate('/pabellon/calendario')
               },
             },
-            { 
-              id: 'pabellones-libres',
-              label: 'Libres',
-              value: `${ocupacion?.totalPabellones - ocupacion?.pabellonesOcupados || 0}`,
-              icon: LayoutGrid,
-              color: theme === 'dark' ? 'text-purple-400' : 'text-purple-600',
-              bg: theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-50',
-              tooltip: 'Ver disponibilidad de pabellones para hoy en el calendario',
-              onClick: () => {
-                try {
-                  sessionStorage.setItem('calendario_ir_hoy', 'day')
-                } catch (e) {
-                  // ignorar errores de storage
-                }
-                navigate('/pabellon/calendario')
-              },
-            }
           ].map((stat, i) => (
             <Tooltip key={stat.id} content={stat.tooltip}>
               <Card 
@@ -505,17 +486,34 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* KPIs Adicionales */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8 lg:mb-10">
+      {/* KPIs Adicionales (3 tarjetas) */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8 lg:mb-10">
         {[
           { 
+            id: 'pabellones-libres',
+            label: 'Bloques libres',
+            value: `${ocupacion?.totalPabellones - ocupacion?.pabellonesOcupados || 0}`,
+            icon: LayoutGrid,
+            color: theme === 'dark' ? 'text-purple-400' : 'text-purple-600',
+            bg: theme === 'dark' ? 'bg-purple-900/30' : 'bg-purple-50',
+            tooltip: 'Ver disponibilidad de pabellones para hoy en el calendario',
+            onClick: () => {
+              try {
+                sessionStorage.setItem('calendario_ir_hoy', 'day')
+              } catch (e) {
+                // ignorar errores de storage
+              }
+              navigate('/pabellon/calendario')
+            },
+          },
+          { 
             id: 'tiempo-promedio',
-            label: 'Tiempo Promedio', 
+            label: 'Tiempo promedio por paciente', 
             value: tiempoPromedioCirugia ? `${Math.floor(tiempoPromedioCirugia / 60)}h ${tiempoPromedioCirugia % 60}m` : 'N/A', 
             icon: Timer, 
             color: theme === 'dark' ? 'text-indigo-400' : 'text-indigo-600', 
             bg: theme === 'dark' ? 'bg-indigo-900/30' : 'bg-indigo-50', 
-            tooltip: 'Tiempo promedio de cirugía (últimos 30 días)',
+            tooltip: 'Tiempo promedio de cirugía por paciente (últimos 30 días)',
             onClick: undefined,
           },
           { 
@@ -533,37 +531,6 @@ export default function Dashboard() {
               }
             },
           },
-          { 
-            id: 'stock-bajo',
-            label: 'Stock Bajo', 
-            value: insumosStockBajo.length.toString(), 
-            icon: Package, 
-            color: insumosStockBajo.length > 0 
-              ? (theme === 'dark' ? 'text-red-400' : 'text-red-600')
-              : (theme === 'dark' ? 'text-gray-400' : 'text-gray-600'), 
-            bg: insumosStockBajo.length > 0 
-              ? (theme === 'dark' ? 'bg-red-900/30' : 'bg-red-50')
-              : (theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'), 
-            tooltip: `Revisar insumos con stock igual o por debajo del mínimo (${insumosStockBajo.length})`,
-            onClick: () => navigate('/pabellon/insumos'),
-          },
-          { 
-            id: 'cirugias-semana',
-            label: 'Cirugías Semana', 
-            value: cirugiasSemana.length.toString(), 
-            icon: Calendar, 
-            color: theme === 'dark' ? 'text-pink-400' : 'text-pink-600', 
-            bg: theme === 'dark' ? 'bg-pink-900/30' : 'bg-pink-50', 
-            tooltip: 'Ver agenda de la semana en el calendario',
-            onClick: () => {
-              try {
-                sessionStorage.setItem('calendario_ir_hoy', 'week')
-              } catch (e) {
-                // ignorar errores de storage
-              }
-              navigate('/pabellon/calendario')
-            },
-          }
         ].map((stat) => (
           <Tooltip key={stat.id} content={stat.tooltip}>
             <Card 

@@ -310,8 +310,11 @@ serve(async (req) => {
       .single()
 
     if (insertDoctorError) {
-      await supabaseAdmin.auth.admin.deleteUser(userId)
-      await supabaseAdmin.from('users').delete().eq('id', userId)
+      // Solo borrar usuario Auth y fila users si acabamos de crearlos (no si reutilizamos uno existente)
+      if (!reusedExistingAuthUser) {
+        await supabaseAdmin.auth.admin.deleteUser(userId)
+        await supabaseAdmin.from('users').delete().eq('id', userId)
+      }
       console.error('Error al crear médico:', insertDoctorError)
 
       // 23503 = foreign key violation (doctors_user_id_fkey): el user_id no existe en users
