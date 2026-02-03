@@ -18,7 +18,8 @@ import {
   ArrowRight,
   MessageSquare,
   BarChart3,
-  Timer
+  Timer,
+  Trash2
 } from 'lucide-react'
 import { format, subDays, eachDayOfInterval } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -174,26 +175,6 @@ export default function Dashboard() {
     },
   })
 
-  // KPIs adicionales: Insumos con stock bajo
-  const { data: insumosStockBajo = [] } = useQuery({
-    queryKey: ['insumos-stock-bajo'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('supplies')
-        .select('id, nombre, codigo, stock_actual, stock_minimo')
-        .eq('activo', true)
-        .is('deleted_at', null)
-      
-      if (error) throw error
-      
-      return (data || []).filter(insumo => 
-        insumo.stock_actual !== null && 
-        insumo.stock_minimo !== null && 
-        insumo.stock_actual <= insumo.stock_minimo
-      )
-    },
-  })
-
   // KPIs adicionales: Tasa de utilización de pabellones (últimos 7 días)
   const { data: tasaUtilizacion } = useQuery({
     queryKey: ['tasa-utilizacion'],
@@ -303,6 +284,29 @@ export default function Dashboard() {
         showError('Error de conexión. Verifique su conexión a internet e intente nuevamente.')
       } else {
         showError('Error al crear recordatorio: ' + errorMessage)
+      }
+    },
+  })
+
+  const marcarRecordatorioVisto = useMutation({
+    mutationFn: async (id) => {
+      const { error } = await supabase
+        .from('reminders')
+        .update({ visto: true })
+        .eq('id', id)
+      
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['recordatorios-pabellon'])
+      showSuccess('Recordatorio marcado como realizado')
+    },
+    onError: (error) => {
+      const errorMessage = error.message || error.toString() || 'Error desconocido'
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+        showError('Error de conexión. Verifique su conexión a internet e intente nuevamente.')
+      } else {
+        showError('Error al marcar recordatorio: ' + errorMessage)
       }
     },
   })
@@ -713,9 +717,11 @@ export default function Dashboard() {
                 <div
                   key={recordatorio.id}
                   className={`p-3 sm:p-4 rounded-xl sm:rounded-2xl border ${
-                    theme === 'dark' || theme === 'medical'
-                      ? 'bg-white/5 border-white/10'
-                      : 'bg-slate-50 border-slate-200'
+                    recordatorio.visto
+                      ? (theme === 'dark' || theme === 'medical' ? 'bg-green-900/20 border-green-500/40' : 'bg-green-50 border-green-200')
+                      : (theme === 'dark' || theme === 'medical'
+                        ? 'bg-white/5 border-white/10'
+                        : 'bg-slate-50 border-slate-200')
                   }`}
                 >
                   <p
@@ -723,19 +729,43 @@ export default function Dashboard() {
                       theme === 'dark' || theme === 'medical'
                         ? 'text-slate-100'
                         : 'text-slate-800'
-                    }`}
+                    } ${recordatorio.visto ? 'line-through opacity-80' : ''}`}
                   >
                     "{recordatorio.contenido}"
                   </p>
-                  <div
-                    className={`flex justify-between items-center text-[8px] sm:text-[9px] font-black uppercase ${
-                      theme === 'dark' || theme === 'medical'
-                        ? 'text-blue-400'
-                        : 'text-blue-600'
-                    }`}
-                  >
-                    <span className="truncate">{recordatorio.titulo}</span>
-                    <span className="ml-2 flex-shrink-0">{format(new Date(recordatorio.created_at), 'dd/MM HH:mm')}</span>
+                  <div className="flex justify-between items-center gap-2 flex-wrap">
+                    <div
+                      className={`flex-1 min-w-0 text-[8px] sm:text-[9px] font-black uppercase ${
+                        theme === 'dark' || theme === 'medical'
+                          ? 'text-blue-400'
+                          : 'text-blue-600'
+                      }`}
+                    >
+                      <span className="truncate">{recordatorio.titulo}</span>
+                      <span className="ml-2 flex-shrink-0">{format(new Date(recordatorio.created_at), 'dd/MM HH:mm')}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {!recordatorio.visto && (
+                        <button
+                          type="button"
+                          onClick={() => marcarRecordatorioVisto.mutate(recordatorio.id)}
+                          disabled={marcarRecordatorioVisto.isPending}
+                          className="p-1.5 sm:p-2 rounded-lg bg-green-600 hover:bg-green-700 text-white transition-all touch-manipulation disabled:opacity-50"
+                          title="Marcar como realizado"
+                        >
+                          <CheckCircle2 size={14} className="sm:w-4 sm:h-4" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => eliminarRecordatorio.mutate(recordatorio.id)}
+                        disabled={eliminarRecordatorio.isPending}
+                        className="p-1.5 sm:p-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-all touch-manipulation disabled:opacity-50"
+                        title="Eliminar recordatorio"
+                      >
+                        <Trash2 size={14} className="sm:w-4 sm:h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))
