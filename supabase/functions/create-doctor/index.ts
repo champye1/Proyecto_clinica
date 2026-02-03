@@ -172,14 +172,53 @@ serve(async (req) => {
     // Usar el email proporcionado (el username se usa solo para referencia, el email es el login)
     const userEmail = email.toLowerCase().trim()
 
-    // Crear usuario en Auth
+    let userId: string
+    let reusedExistingAuthUser = false
+
+    // Crear usuario en Auth (o reutilizar si el correo ya existe por un intento anterior fallido)
     const { data: authData, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
       email: userEmail,
       password: tempPassword,
       email_confirm: true,
     })
 
-    if (createUserError || !authData?.user) {
+    const isDuplicateEmail = createUserError?.message?.toLowerCase().includes('already') ||
+      createUserError?.message?.toLowerCase().includes('registered') ||
+      createUserError?.message?.toLowerCase().includes('duplicate')
+
+    if (isDuplicateEmail) {
+      // El correo ya existe en Auth. Buscar id: primero en public.users (más fiable), si no en Auth listUsers
+      const { data: rowInUsers } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('email', userEmail)
+        .limit(1)
+        .maybeSingle()
+
+      if (rowInUsers?.id) {
+        userId = rowInUsers.id
+        reusedExistingAuthUser = true
+        await supabaseAdmin.auth.admin.updateUserById(userId, { password: tempPassword })
+      } else {
+        const { data: listData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 })
+        const existing = listData?.users?.find(u => u.email?.toLowerCase() === userEmail)
+        if (!existing?.id) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: 'Ese correo ya está registrado en Auth pero no se encontró el usuario. Elimina el usuario en Authentication → Users o usa otro correo y vuelve a intentar.'
+            }),
+            {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              status: 200,
+            },
+          )
+        }
+        userId = existing.id
+        reusedExistingAuthUser = true
+        await supabaseAdmin.auth.admin.updateUserById(existing.id, { password: tempPassword })
+      }
+    } else if (createUserError || !authData?.user) {
       console.error('Error al crear usuario en Auth:', createUserError)
       return new Response(
         JSON.stringify({
@@ -191,24 +230,28 @@ serve(async (req) => {
           status: 200,
         },
       )
+    } else {
+      userId = authData.user.id
     }
 
-    const userId = authData.user.id
-
-    // Crear registro en users (la tabla users tiene: id, email, role)
-    const { error: insertUserError } = await supabaseAdmin
+    // Crear registro en public.users si no existe (obligatorio para que doctors.user_id cumpla la FK)
+    const { data: insertedUser, error: insertUserError } = await supabaseAdmin
       .from('users')
       .insert({
         id: userId,
-        email: email.toLowerCase().trim(),
+        email: userEmail,
         role: 'doctor',
       })
+      .select('id')
+      .single()
 
     if (insertUserError) {
-      await supabaseAdmin.auth.admin.deleteUser(userId)
+      if (!reusedExistingAuthUser) await supabaseAdmin.auth.admin.deleteUser(userId)
       console.error('Error al crear registro en users:', insertUserError)
-      // 23505 = unique violation: el email o id ya existe (ej. médico ya registrado con ese correo)
-      if (insertUserError.code === '23505') {
+      // 23505 = unique violation: si reutilizamos usuario existente, public.users ya tiene la fila → continuar a crear médico
+      if (insertUserError.code === '23505' && reusedExistingAuthUser) {
+        // No devolver error; seguir a crear el médico
+      } else if (insertUserError.code === '23505') {
         return new Response(
           JSON.stringify({
             success: false,
@@ -219,11 +262,29 @@ serve(async (req) => {
             status: 200,
           },
         )
+      } else {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `Error al crear usuario en el sistema: ${insertUserError.message}`
+          }),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200,
+          },
+        )
       }
+    }
+
+    // Verificar que la fila existe (salvo si reutilizamos usuario y ya estaba en public.users)
+    const userRowOk = insertedUser?.id || (insertUserError?.code === '23505' && reusedExistingAuthUser)
+    if (!userRowOk) {
+      if (!reusedExistingAuthUser) await supabaseAdmin.auth.admin.deleteUser(userId)
+      console.error('El registro en users no se creó correctamente')
       return new Response(
         JSON.stringify({
           success: false,
-          error: `Error al crear registro en users: ${insertUserError.message}`
+          error: 'No se pudo crear el usuario en el sistema. Comprueba que la tabla users permita inserciones con la clave de servicio (RLS/permisos).'
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -252,6 +313,20 @@ serve(async (req) => {
       await supabaseAdmin.auth.admin.deleteUser(userId)
       await supabaseAdmin.from('users').delete().eq('id', userId)
       console.error('Error al crear médico:', insertDoctorError)
+
+      // 23503 = foreign key violation (doctors_user_id_fkey): el user_id no existe en users
+      if (insertDoctorError.code === '23503') {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'No se pudo vincular el médico al usuario. El usuario se creó en Auth pero no en la tabla de usuarios. Contacta al administrador o revisa permisos/RLS de la tabla users.'
+          }),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200,
+          },
+        )
+      }
 
       if (insertDoctorError.code === '23505') {
         if (insertDoctorError.message.includes('rut') || insertDoctorError.details?.includes('rut')) {
