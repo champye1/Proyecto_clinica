@@ -18,7 +18,7 @@ export default function BloqueoHorario() {
     hora_inicio: '',
     hora_fin: '',
     motivo: '',
-    vigencia_hasta: '',
+    dias_limite_vigencia: '',
   })
   const [showConfirmEliminar, setShowConfirmEliminar] = useState(false)
   const [bloqueoAEliminar, setBloqueoAEliminar] = useState(null)
@@ -120,7 +120,7 @@ export default function BloqueoHorario() {
         hora_inicio: '',
         hora_fin: '',
         motivo: '',
-        vigencia_hasta: '',
+        dias_limite_vigencia: '',
       })
       setBloqueoEditando(null)
       showSuccess('Bloqueo creado exitosamente')
@@ -154,7 +154,7 @@ export default function BloqueoHorario() {
         hora_inicio: '',
         hora_fin: '',
         motivo: '',
-        vigencia_hasta: '',
+        dias_limite_vigencia: '',
       })
       setBloqueoEditando(null)
       showSuccess('Bloqueo actualizado exitosamente')
@@ -260,9 +260,10 @@ export default function BloqueoHorario() {
       return
     }
     
-    // Validar vigencia
-    if (formData.vigencia_hasta && formData.vigencia_hasta < formData.fecha) {
-      showError('La fecha de vigencia debe ser mayor o igual a la fecha del bloqueo')
+    // Validar días límite de vigencia (entero positivo si se indica)
+    const dias = formData.dias_limite_vigencia === '' ? null : parseInt(formData.dias_limite_vigencia, 10)
+    if (formData.dias_limite_vigencia !== '' && (Number.isNaN(dias) || dias < 1)) {
+      showError('Los días límite de vigencia deben ser un número mayor a 0')
       return
     }
 
@@ -273,10 +274,20 @@ export default function BloqueoHorario() {
       return
     }
     
+    const payload = {
+      doctor_id: formData.doctor_id || null,
+      operating_room_id: formData.operating_room_id,
+      fecha: formData.fecha,
+      hora_inicio: formData.hora_inicio,
+      hora_fin: formData.hora_fin,
+      motivo: formData.motivo || null,
+      dias_auto_liberacion: dias != null && dias > 0 ? dias : null,
+      vigencia_hasta: null,
+    }
     if (bloqueoEditando) {
-      actualizarBloqueo.mutate({ id: bloqueoEditando.id, data: formData })
+      actualizarBloqueo.mutate({ id: bloqueoEditando.id, data: payload })
     } else {
-      crearBloqueo.mutate(formData)
+      crearBloqueo.mutate(payload)
     }
   }
 
@@ -301,7 +312,7 @@ export default function BloqueoHorario() {
       hora_inicio: bloqueo.hora_inicio,
       hora_fin: bloqueo.hora_fin,
       motivo: bloqueo.motivo || '',
-      vigencia_hasta: bloqueo.vigencia_hasta || '',
+      dias_limite_vigencia: bloqueo.dias_auto_liberacion != null ? String(bloqueo.dias_auto_liberacion) : '',
     })
     // Scroll al formulario
     document.querySelector('.card form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -316,7 +327,7 @@ export default function BloqueoHorario() {
       hora_inicio: '',
       hora_fin: '',
       motivo: '',
-      vigencia_hasta: '',
+      dias_limite_vigencia: '',
     })
   }
 
@@ -425,16 +436,18 @@ export default function BloqueoHorario() {
             </div>
 
             <div>
-              <label className="label-field">Vigencia Hasta (Opcional)</label>
+              <label className="label-field">Días límite de vigencia (Opcional)</label>
               <input
-                type="date"
-                value={formData.vigencia_hasta}
-                onChange={(e) => setFormData({ ...formData, vigencia_hasta: sanitizeString(e.target.value) })}
+                type="number"
+                min={1}
+                max={365}
+                value={formData.dias_limite_vigencia}
+                onChange={(e) => setFormData({ ...formData, dias_limite_vigencia: e.target.value.replace(/\D/g, '').slice(0, 3) })}
                 className="input-field"
-                min={formData.fecha}
+                placeholder="Ej: 5"
               />
               <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-slate-200' : 'text-gray-600'}`}>
-                Si no se especifica, el bloqueo será permanente hasta liberación manual
+                Ejemplo: si pones 5, el bloqueo dura 5 días desde la fecha del bloqueo y luego se libera si no se llenó. Puedes usar cualquier número (5, 15, etc.). Vacío = permanente hasta liberación manual.
               </p>
             </div>
 
@@ -465,22 +478,28 @@ export default function BloqueoHorario() {
               bloqueosPaginados.map(bloqueo => (
                 <div key={bloqueo.id} className={`border rounded-lg p-4 ${theme === 'dark' ? 'border-slate-700' : 'border-slate-200'}`}>
                   <div className="flex justify-between items-start">
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <p className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{bloqueo.operating_rooms?.nombre}</p>
-                      <p className={`text-sm ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>
-                        {bloqueo.fecha} {bloqueo.hora_inicio} - {bloqueo.hora_fin}
+                      <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>
+                        <span className={`font-medium ${theme === 'dark' ? 'text-blue-300' : 'text-blue-600'}`}>Inicio:</span> {bloqueo.fecha} · {bloqueo.hora_inicio} - {bloqueo.hora_fin}
+                      </p>
+                      <p className={`text-sm mt-0.5 ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>
+                        <span className={`font-medium ${theme === 'dark' ? 'text-blue-300' : 'text-blue-600'}`}>Fin:</span>{' '}
+                        {bloqueo.fecha_auto_liberacion || bloqueo.vigencia_hasta
+                          ? (bloqueo.fecha_auto_liberacion || bloqueo.vigencia_hasta)
+                          : 'Permanente (hasta liberación manual)'}
                       </p>
                       {bloqueo.doctors && (
-                        <p className={`text-sm ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'}`}>
+                        <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'}`}>
                           Dr. {bloqueo.doctors.nombre} {bloqueo.doctors.apellido}
                         </p>
                       )}
                       {bloqueo.motivo && (
                         <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-slate-200' : 'text-gray-600'}`}>{bloqueo.motivo}</p>
                       )}
-                      {bloqueo.vigencia_hasta && (
-                        <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-500'}`}>
-                          Válido hasta: {bloqueo.vigencia_hasta}
+                      {bloqueo.dias_auto_liberacion != null && (
+                        <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>
+                          Vigencia: {bloqueo.dias_auto_liberacion} día(s) desde el inicio
                         </p>
                       )}
                     </div>

@@ -424,10 +424,10 @@ export default function Insumos() {
                 value={formData.grupos_fonasa}
                 onChange={(e) => setFormData({ ...formData, grupos_fonasa: sanitizeString(e.target.value) })}
                 className="input-field"
-                placeholder="Ej: 18,80 — Vacío = disponible para todas las cirugías"
+                placeholder="Ej: 18, 11, 30 — Vacío = disponible para todas las cirugías"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Códigos de grupo Fonasa separados por coma (ej. 18=hernias, 80=neuro). Si está vacío, el médico puede elegir este insumo en cualquier cirugía.
+              <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>
+                Códigos de grupo de prestación FONASA (según tipo de cirugía): 18 = general, 11 = ortopedia, 20 = plástica, 30 = oftalmología, 40 = otorrino, 50 = urología, 60 = gineco. Separados por coma. Vacío = el insumo aplica a todas las cirugías.
               </p>
             </div>
 
@@ -471,7 +471,7 @@ export default function Insumos() {
                 <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Código</th>
                 <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Grupo Prestación</th>
                 <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Proveedor</th>
-                <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Grupos Fonasa</th>
+                <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`} title="Grupos de prestación FONASA para los que aplica este insumo (ej. 18=general, 11=ortopedia). Vacío = todas las cirugías.">Grupos Fonasa</th>
                 <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Acciones</th>
               </tr>
             </thead>
