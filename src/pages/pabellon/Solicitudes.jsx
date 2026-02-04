@@ -9,6 +9,7 @@ import { useNotifications } from '../../hooks/useNotifications'
 import { useDebounce } from '../../hooks/useDebounce'
 import { useTheme } from '../../contexts/ThemeContext'
 import { sanitizeString } from '../../utils/sanitizeInput'
+import { HORAS_SELECT } from '../../utils/horasOpciones'
 import { logger } from '../../utils/logger'
 import Button from '../../components/common/Button'
 import EmptyState from '../../components/common/EmptyState'
@@ -885,9 +886,22 @@ export default function Solicitudes() {
                     })()}
                   </div>
                   <div>
-                    <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1">Hora Recomendada</p>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1">
+                      {solicitudDetalle.fecha_preferida ? 'Horario solicitado (slot vacío)' : 'Hora Recomendada'}
+                    </p>
                     <p className="text-sm font-bold text-slate-700">
-                      {solicitudDetalle.hora_recomendada || 'No especificada'}
+                      {solicitudDetalle.fecha_preferida ? (
+                        <>
+                          {format(new Date(solicitudDetalle.fecha_preferida), 'dd/MM/yyyy')}
+                          {solicitudDetalle.hora_recomendada && (
+                            <> · {typeof solicitudDetalle.hora_recomendada === 'string' ? solicitudDetalle.hora_recomendada.slice(0, 5) : solicitudDetalle.hora_recomendada}
+                              {solicitudDetalle.hora_fin_recomendada && `–${typeof solicitudDetalle.hora_fin_recomendada === 'string' ? solicitudDetalle.hora_fin_recomendada.slice(0, 5) : solicitudDetalle.hora_fin_recomendada}`}
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        solicitudDetalle.hora_recomendada ? (typeof solicitudDetalle.hora_recomendada === 'string' ? solicitudDetalle.hora_recomendada.slice(0, 5) : solicitudDetalle.hora_recomendada) : 'No especificada'
+                      )}
                     </p>
                   </div>
                   <div className="col-span-2">
@@ -1025,39 +1039,18 @@ export default function Solicitudes() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Hora Fin *</label>
-                  <input
-                    type="time"
-                    value={formProgramacion.hora_fin}
-                    onChange={(e) => {
-                      const nuevaHoraFin = e.target.value
-                      // Validar que hora fin > hora inicio
-                      if (formProgramacion.hora_inicio && nuevaHoraFin) {
-                        const [horaInicioH, horaInicioM] = formProgramacion.hora_inicio.split(':').map(Number)
-                        const [horaFinH, horaFinM] = nuevaHoraFin.split(':').map(Number)
-                        const minutosInicio = horaInicioH * 60 + horaInicioM
-                        const minutosFin = horaFinH * 60 + horaFinM
-                        
-                        if (minutosFin <= minutosInicio) {
-                          showError('La hora de fin debe ser mayor que la hora de inicio')
-                          return
-                        }
-                      }
-                      setFormProgramacion({ ...formProgramacion, hora_fin: sanitizeString(nuevaHoraFin) })
-                    }}
-                    min={formProgramacion.hora_inicio || undefined}
+                  <select
+                    value={formProgramacion.hora_fin ? String(formProgramacion.hora_fin).slice(0, 5) : ''}
+                    onChange={(e) => setFormProgramacion({ ...formProgramacion, hora_fin: e.target.value })}
                     className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl py-3.5 px-5 focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-slate-700"
                     required
-                  />
-                  {formProgramacion.hora_inicio && formProgramacion.hora_fin && (() => {
-                    const [horaInicioH, horaInicioM] = formProgramacion.hora_inicio.split(':').map(Number)
-                    const [horaFinH, horaFinM] = formProgramacion.hora_fin.split(':').map(Number)
-                    const minutosInicio = horaInicioH * 60 + horaInicioM
-                    const minutosFin = horaFinH * 60 + horaFinM
-                    const esValido = minutosFin > minutosInicio
-                    return !esValido ? (
-                      <p className="mt-2 text-sm text-red-600">La hora de fin debe ser mayor que {formProgramacion.hora_inicio}</p>
-                    ) : null
-                  })()}
+                  >
+                    <option value="">Seleccione hora</option>
+                    {HORAS_SELECT.filter(h => !formProgramacion.hora_inicio || h > String(formProgramacion.hora_inicio).slice(0, 5)).map(h => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-500 ml-1">Solo hora (sin minutos)</p>
                 </div>
               </div>
 

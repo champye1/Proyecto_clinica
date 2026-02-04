@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../config/supabase'
 import { Clock, CheckCircle2, XCircle, Edit, X, Package, CalendarClock } from 'lucide-react'
 import { format } from 'date-fns'
+import { HORAS_SELECT } from '../../utils/horasOpciones'
 import { useNotifications } from '../../hooks/useNotifications'
 import { useTheme } from '../../contexts/ThemeContext'
 import { sanitizeString, sanitizeNumber } from '../../utils/sanitizeInput'
@@ -137,6 +138,8 @@ export default function Solicitudes() {
         .update({
           codigo_operacion: formData.codigo_operacion,
           hora_recomendada: formData.hora_recomendada || null,
+          hora_fin_recomendada: formData.hora_fin_recomendada || null,
+          fecha_preferida: formData.fecha_preferida || null,
           observaciones: formData.observaciones || null,
           updated_at: new Date().toISOString(),
         })
@@ -174,6 +177,8 @@ export default function Solicitudes() {
       setFormEdicion({
         codigo_operacion: '',
         hora_recomendada: '',
+        hora_fin_recomendada: '',
+        fecha_preferida: '',
         observaciones: '',
         insumos: [],
       })
@@ -197,7 +202,9 @@ export default function Solicitudes() {
     setSolicitudEditando(solicitud)
     setFormEdicion({
       codigo_operacion: solicitud.codigo_operacion || '',
-      hora_recomendada: solicitud.hora_recomendada || '',
+      hora_recomendada: solicitud.hora_recomendada ? (typeof solicitud.hora_recomendada === 'string' ? solicitud.hora_recomendada.slice(0, 5) : solicitud.hora_recomendada) : '',
+      hora_fin_recomendada: solicitud.hora_fin_recomendada ? (typeof solicitud.hora_fin_recomendada === 'string' ? solicitud.hora_fin_recomendada.slice(0, 5) : solicitud.hora_fin_recomendada) : '',
+      fecha_preferida: solicitud.fecha_preferida || '',
       observaciones: solicitud.observaciones || '',
       insumos: (solicitud.surgery_request_supplies || []).map(item => ({
         supply_id: item.supplies?.id || item.supply_id,
@@ -377,10 +384,24 @@ export default function Solicitudes() {
                   </div>
                 )}
 
-                {solicitud.hora_recomendada && (
+                {(solicitud.hora_recomendada || solicitud.fecha_preferida) && (
                   <div className="mb-2">
-                    <span className={`text-sm font-medium ${isDark ? 'text-slate-300' : ''}`}>Hora Recomendada: </span>
-                    <span className={`text-sm ${isDark ? 'text-slate-200' : 'text-gray-600'}`}>{solicitud.hora_recomendada}</span>
+                    <span className={`text-sm font-medium ${isDark ? 'text-slate-300' : ''}`}>
+                      {solicitud.fecha_preferida ? 'Horario solicitado (vacío, sin reservas ni bloqueos): ' : 'Hora recomendada: '}
+                    </span>
+                    <span className={`text-sm ${isDark ? 'text-slate-200' : 'text-gray-600'}`}>
+                      {solicitud.fecha_preferida && (
+                        <>
+                          {format(new Date(solicitud.fecha_preferida), 'dd/MM/yyyy')}
+                          {solicitud.hora_recomendada && (
+                            <> · {typeof solicitud.hora_recomendada === 'string' ? solicitud.hora_recomendada.slice(0, 5) : solicitud.hora_recomendada}
+                              {solicitud.hora_fin_recomendada && `–${typeof solicitud.hora_fin_recomendada === 'string' ? solicitud.hora_fin_recomendada.slice(0, 5) : solicitud.hora_fin_recomendada}`}
+                            </>
+                          )}
+                        </>
+                      )}
+                      {!solicitud.fecha_preferida && solicitud.hora_recomendada && (typeof solicitud.hora_recomendada === 'string' ? solicitud.hora_recomendada.slice(0, 5) : solicitud.hora_recomendada)}
+                    </span>
                   </div>
                 )}
 
@@ -494,12 +515,17 @@ export default function Solicitudes() {
 
             <div>
               <label className="label-field">Hora Recomendada (Opcional)</label>
-              <input
-                type="time"
-                value={formEdicion.hora_recomendada}
-                onChange={(e) => setFormEdicion({ ...formEdicion, hora_recomendada: sanitizeString(e.target.value) })}
+              <select
+                value={formEdicion.hora_recomendada ? String(formEdicion.hora_recomendada).slice(0, 5) : ''}
+                onChange={(e) => setFormEdicion({ ...formEdicion, hora_recomendada: e.target.value })}
                 className="input-field"
-              />
+              >
+                <option value="">Sin preferencia</option>
+                {HORAS_SELECT.map(h => (
+                  <option key={h} value={h}>{h}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-0.5">Solo hora (sin minutos)</p>
             </div>
 
             <div>

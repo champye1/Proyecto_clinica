@@ -4,6 +4,7 @@ import { supabase } from '../../config/supabase'
 import { Calendar, Clock, Users, X, Edit } from 'lucide-react'
 import { useNotifications } from '../../hooks/useNotifications'
 import { sanitizeString } from '../../utils/sanitizeInput'
+import { HORAS_SELECT } from '../../utils/horasOpciones'
 import Pagination from '../../components/common/Pagination'
 import ConfirmModal from '../../components/common/ConfirmModal'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
@@ -401,23 +402,33 @@ export default function BloqueoHorario() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="label-field">Hora Inicio *</label>
-                <input
-                  type="time"
-                  value={formData.hora_inicio}
-                  onChange={(e) => setFormData({ ...formData, hora_inicio: sanitizeString(e.target.value) })}
+                <select
+                  value={formData.hora_inicio ? String(formData.hora_inicio).slice(0, 5) : ''}
+                  onChange={(e) => setFormData({ ...formData, hora_inicio: e.target.value })}
                   className="input-field"
                   required
-                />
+                >
+                  <option value="">Seleccione hora</option>
+                  {HORAS_SELECT.map(h => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+                <p className={`text-xs mt-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Solo hora (sin minutos)</p>
               </div>
               <div>
                 <label className="label-field">Hora Fin *</label>
-                <input
-                  type="time"
-                  value={formData.hora_fin}
-                  onChange={(e) => setFormData({ ...formData, hora_fin: sanitizeString(e.target.value) })}
+                <select
+                  value={formData.hora_fin ? String(formData.hora_fin).slice(0, 5) : ''}
+                  onChange={(e) => setFormData({ ...formData, hora_fin: e.target.value })}
                   className="input-field"
                   required
-                />
+                >
+                  <option value="">Seleccione hora</option>
+                  {HORAS_SELECT.filter(h => !formData.hora_inicio || h > formData.hora_inicio).map(h => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+                <p className={`text-xs mt-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Solo hora (sin minutos)</p>
               </div>
             </div>
 

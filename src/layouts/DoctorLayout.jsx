@@ -8,6 +8,7 @@ import {
   UserPlus, 
   FileText, 
   Calendar, 
+  LayoutGrid,
   Bell,
   LogOut,
   Menu,
@@ -20,6 +21,7 @@ import Dashboard from '../pages/doctor/Dashboard'
 import CrearPaciente from '../pages/doctor/CrearPaciente'
 import Solicitudes from '../pages/doctor/Solicitudes'
 import Calendario from '../pages/doctor/Calendario'
+import HorariosDisponibles from '../pages/doctor/HorariosDisponibles'
 import { useRealtimeNotifications } from '../hooks/useRealtimeNotifications'
 import { useUnreadNotifications } from '../hooks/useUnreadNotifications'
 import { useNotificationsList } from '../hooks/useNotificationsList'
@@ -28,6 +30,7 @@ const menuItems = [
   { path: '/doctor', icon: LayoutDashboard, label: 'Panel Principal' },
   { path: '/doctor/paciente', icon: UserPlus, label: 'Crear Paciente' },
   { path: '/doctor/solicitudes', icon: FileText, label: 'Mis Solicitudes' },
+  { path: '/doctor/horarios', icon: LayoutGrid, label: 'Horarios pabellones' },
   { path: '/doctor/calendario', icon: Calendar, label: 'Mi Calendario' },
 ]
 
@@ -330,6 +333,7 @@ export default function DoctorLayout() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/paciente" element={<CrearPaciente />} />
             <Route path="/solicitudes" element={<Solicitudes />} />
+            <Route path="/horarios" element={<HorariosDisponibles />} />
             <Route path="/calendario" element={<Calendario />} />
             <Route path="*" element={<Navigate to="/doctor" />} />
           </Routes>

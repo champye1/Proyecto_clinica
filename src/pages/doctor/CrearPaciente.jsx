@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../config/supabase'
-import { UserPlus, Package, AlertCircle, Ban } from 'lucide-react'
+import { UserPlus, Package, AlertCircle, Ban, Calendar, LayoutGrid } from 'lucide-react'
 import { formatRut, cleanRut, validateRut, isValidRutFormat } from '../../utils/rutFormatter'
 import { sanitizeString, sanitizeRut, sanitizeNumber } from '../../utils/sanitizeInput'
 import SearchableSelect from '../../components/SearchableSelect'
@@ -10,6 +11,8 @@ import { useNotifications } from '../../hooks/useNotifications'
 import { useTheme } from '../../contexts/ThemeContext'
 import ConfirmModal from '../../components/common/ConfirmModal'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
+import CalendarioPabellonesGrid from '../../components/CalendarioPabellonesGrid'
+import { HORAS_SELECT } from '../../utils/horasOpciones'
 
 export default function CrearPaciente() {
   const [formData, setFormData] = useState({
@@ -18,18 +21,67 @@ export default function CrearPaciente() {
     rut: '',
     codigo_operacion: '',
     hora_recomendada: '',
+    hora_fin_recomendada: '',
+    fecha_preferida: '',
+    operating_room_id_preferido: '',
+    hora_recomendada_2: '',
+    hora_fin_recomendada_2: '',
+    fecha_preferida_2: '',
+    operating_room_id_preferido_2: '',
+    dejar_fecha_a_pabellon: false,
+    horarios_extra: [], // [{ fecha_preferida, operating_room_id, hora_recomendada, hora_fin_recomendada }]
     observaciones: '',
     insumos: [], // Array de { supply_id, cantidad }
   })
+  const [slot1Seleccionado, setSlot1Seleccionado] = useState(null) // { operating_room_id, nombre_pabellon, hora_inicio, hora_fin }
+  const [slot2Seleccionado, setSlot2Seleccionado] = useState(null)
+  const [showSegundoHorario, setShowSegundoHorario] = useState(false) // Se muestra "Agregar otro día" y luego el 2º bloque
 
   const [insumoSeleccionado, setInsumoSeleccionado] = useState('')
   const [cantidadInsumo, setCantidadInsumo] = useState(1)
   const [rutError, setRutError] = useState('')
   const [showConfirmSinInsumos, setShowConfirmSinInsumos] = useState(false)
+  const [showCalendarioGrid, setShowCalendarioGrid] = useState(false)
 
   const queryClient = useQueryClient()
   const { showError, showSuccess } = useNotifications()
   const { theme } = useTheme()
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  // Prellenar horarios preferidos si viene desde "Horarios pabellones" (uno o dos bloques)
+  useEffect(() => {
+    const state = location.state
+    if (!state?.desdeDisponibilidad || !state.fechaPreferida) return
+    const s1 = state.slot1
+    const s2 = state.slot2
+    if (s1) {
+      setFormData(prev => ({
+        ...prev,
+        fecha_preferida: state.fechaPreferida,
+        hora_recomendada: s1.horaInicio || '',
+        hora_fin_recomendada: s1.horaFin || '',
+        operating_room_id_preferido: s1.operating_room_id || '',
+        fecha_preferida_2: s2 ? (state.fechaPreferida2 || state.fechaPreferida) : '',
+        hora_recomendada_2: s2?.horaInicio || '',
+        hora_fin_recomendada_2: s2?.horaFin || '',
+        operating_room_id_preferido_2: s2?.operating_room_id || '',
+      }))
+      setSlot1Seleccionado({
+        operating_room_id: s1.operating_room_id,
+        nombre_pabellon: s1.nombrePabellon || '',
+        hora_inicio: s1.horaInicio,
+        hora_fin: s1.horaFin,
+      })
+      setSlot2Seleccionado(s2 ? {
+        operating_room_id: s2.operating_room_id,
+        nombre_pabellon: s2.nombrePabellon || '',
+        hora_inicio: s2.horaInicio,
+        hora_fin: s2.horaFin,
+      } : null)
+      if (s2) setShowSegundoHorario(true)
+    }
+  }, [location.state])
 
   const { data: doctor } = useQuery({
     queryKey: ['doctor-actual'],
@@ -60,6 +112,20 @@ export default function CrearPaciente() {
       
       if (error) throw error
       return data
+    },
+  })
+
+  const { data: pabellonesList = [] } = useQuery({
+    queryKey: ['operating-rooms-crear'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('operating_rooms')
+        .select('id, nombre')
+        .eq('activo', true)
+        .is('deleted_at', null)
+        .order('nombre')
+      if (error) throw error
+      return data || []
     },
   })
 
@@ -190,6 +256,15 @@ export default function CrearPaciente() {
           patient_id: paciente.id,
           codigo_operacion: data.codigo_operacion,
           hora_recomendada: data.hora_recomendada || null,
+          hora_fin_recomendada: data.hora_fin_recomendada || null,
+          fecha_preferida: data.fecha_preferida || null,
+          operating_room_id_preferido: data.operating_room_id_preferido || null,
+          hora_recomendada_2: data.hora_recomendada_2 || null,
+          hora_fin_recomendada_2: data.hora_fin_recomendada_2 || null,
+          fecha_preferida_2: data.fecha_preferida_2 || null,
+          operating_room_id_preferido_2: data.operating_room_id_preferido_2 || null,
+          dejar_fecha_a_pabellon: data.dejar_fecha_a_pabellon === true,
+          horarios_preferidos_extra: data.horarios_extra?.length ? data.horarios_extra : null,
           observaciones: data.observaciones || null,
         })
         .select()
@@ -214,20 +289,36 @@ export default function CrearPaciente() {
 
       return { paciente, solicitud }
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries(['solicitudes-doctor-pendientes'])
+      queryClient.invalidateQueries({ queryKey: ['estado-slots-pabellon'] })
       setFormData({
         nombre: '',
         apellido: '',
         rut: '',
         codigo_operacion: '',
         hora_recomendada: '',
+        hora_fin_recomendada: '',
+        fecha_preferida: '',
+        operating_room_id_preferido: '',
+        hora_recomendada_2: '',
+        hora_fin_recomendada_2: '',
+        fecha_preferida_2: '',
+        operating_room_id_preferido_2: '',
+        dejar_fecha_a_pabellon: false,
+        horarios_extra: [],
         observaciones: '',
         insumos: [],
       })
-      // Limpiar error de RUT si existe
+      setSlot1Seleccionado(null)
+      setSlot2Seleccionado(null)
+      setShowSegundoHorario(false)
       setRutError('')
-      showSuccess('Solicitud creada exitosamente')
+      showSuccess('Solicitud creada exitosamente. El horario quedó guardado para este paciente.')
+      // Redirigir a Horarios pabellones con la fecha del horario para que vea el slot como "Solicitado"
+      if (variables?.fecha_preferida) {
+        navigate('/doctor/horarios', { state: { fecha: variables.fecha_preferida }, replace: true })
+      }
     },
     onError: (error) => {
       // Manejo de errores específicos
@@ -475,27 +566,389 @@ export default function CrearPaciente() {
           {/* Datos de la operación */}
           <div>
             <h2 className="text-xl font-bold mb-4">Datos de la Operación</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="label-field">Código de Operación *</label>
-                <SearchableSelect
-                  options={codigosOperaciones}
-                  value={formData.codigo_operacion}
-                  onChange={(codigo) => setFormData({ ...formData, codigo_operacion: codigo })}
-                  placeholder="Buscar código de operación..."
-                  required
-                />
-              </div>
-              <div>
-                <label className="label-field">Hora Recomendada (Opcional)</label>
-                <input
-                  type="time"
-                  value={formData.hora_recomendada}
-                  onChange={(e) => setFormData({ ...formData, hora_recomendada: sanitizeString(e.target.value) })}
-                  className="input-field"
-                />
-              </div>
+            <div>
+              <label className="label-field">Código de Operación *</label>
+              <SearchableSelect
+                options={codigosOperaciones}
+                value={formData.codigo_operacion}
+                onChange={(codigo) => setFormData({ ...formData, codigo_operacion: codigo })}
+                placeholder="Buscar código de operación..."
+                required
+              />
             </div>
+
+            {/* Botón para ver calendario y disponibilidad de pabellones (se muestra aquí mismo) */}
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={() => setShowCalendarioGrid(prev => !prev)}
+                className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+                  theme === 'dark'
+                    ? 'bg-slate-700 text-slate-100 hover:bg-slate-600 border border-slate-600'
+                    : 'bg-white border border-slate-300 text-gray-700 hover:bg-slate-100'
+                }`}
+                title="Ver en qué pabellón y qué día hay disponibilidad"
+              >
+                <Calendar className="w-5 h-5" />
+                <span>{showCalendarioGrid ? 'Ocultar calendario' : 'Ver calendario y disponibilidad de pabellones'}</span>
+                <LayoutGrid className="w-4 h-4 opacity-70" />
+              </button>
+              <p className={`text-xs mt-1.5 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>
+                {formData.fecha_preferida
+                  ? 'Ve en qué pabellón está libre cada slot. Puede cambiar de día y volver a elegir.'
+                  : 'Elija el día y la hora desde el calendario; luego se mostrará aquí el horario seleccionado.'}
+              </p>
+            </div>
+
+            {/* Vista de horarios por pabellón (inline): día + tabla + selección */}
+            {showCalendarioGrid && (
+              <div className={`mt-4 p-4 rounded-xl border ${theme === 'dark' ? 'bg-slate-800/30 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
+                <CalendarioPabellonesGrid
+                  theme={theme}
+                  inlineMode
+                  onCerrar={() => setShowCalendarioGrid(false)}
+                  onConfirm={(payload) => {
+                    if (payload.slot1) {
+                      setFormData(prev => ({
+                        ...prev,
+                        fecha_preferida: payload.fechaPreferida || '',
+                        hora_recomendada: payload.slot1.horaInicio || '',
+                        hora_fin_recomendada: payload.slot1.horaFin || '',
+                        operating_room_id_preferido: payload.slot1.operating_room_id || '',
+                        fecha_preferida_2: payload.slot2 ? (payload.fechaPreferida2 || payload.fechaPreferida) : '',
+                        hora_recomendada_2: payload.slot2?.horaInicio || '',
+                        hora_fin_recomendada_2: payload.slot2?.horaFin || '',
+                        operating_room_id_preferido_2: payload.slot2?.operating_room_id || '',
+                      }))
+                      setSlot1Seleccionado({
+                        operating_room_id: payload.slot1.operating_room_id,
+                        nombre_pabellon: payload.slot1.nombrePabellon || '',
+                        hora_inicio: payload.slot1.horaInicio,
+                        hora_fin: payload.slot1.horaFin,
+                      })
+                      setSlot2Seleccionado(payload.slot2 ? {
+                        operating_room_id: payload.slot2.operating_room_id,
+                        nombre_pabellon: payload.slot2.nombrePabellon || '',
+                        hora_inicio: payload.slot2.horaInicio,
+                        hora_fin: payload.slot2.horaFin,
+                      } : null)
+                    }
+                    setShowCalendarioGrid(false)
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Opción: dejar fecha a pabellón o elegir horarios */}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {formData.dejar_fecha_a_pabellon ? (
+                <div className={`flex flex-wrap items-center gap-2 p-3 rounded-xl border ${theme === 'dark' ? 'bg-slate-800/50 border-slate-600' : 'bg-slate-100 border-slate-200'}`}>
+                  <span className={`text-sm ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>
+                    La fecha y hora serán asignadas por pabellón.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, dejar_fecha_a_pabellon: false }))}
+                    className={`text-sm font-medium underline ${theme === 'dark' ? 'text-slate-400 hover:text-slate-200' : 'text-gray-600 hover:text-gray-800'}`}
+                  >
+                    Elegir yo los horarios
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({
+                    ...prev,
+                    dejar_fecha_a_pabellon: true,
+                    fecha_preferida: '',
+                    hora_recomendada: '',
+                    hora_fin_recomendada: '',
+                    operating_room_id_preferido: '',
+                    fecha_preferida_2: '',
+                    hora_recomendada_2: '',
+                    hora_fin_recomendada_2: '',
+                    operating_room_id_preferido_2: '',
+                    horarios_extra: [],
+                  }))}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border ${theme === 'dark' ? 'bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700' : 'bg-white border-slate-300 text-gray-700 hover:bg-slate-100'}`}
+                >
+                  Dejar fecha a pabellón (que ellos la elijan)
+                </button>
+              )}
+            </div>
+
+            {/* Horarios preferidos: solo se muestra cuando ya eligió el día desde el calendario */}
+            {!formData.dejar_fecha_a_pabellon && formData.fecha_preferida && (
+            <div className={`mt-4 p-4 rounded-xl border space-y-4 ${theme === 'dark' ? 'bg-slate-800/50 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
+              <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>
+                Horario elegido desde el calendario. Puede ajustar día, pabellón u hora aquí si lo desea.
+              </p>
+
+              {/* 1º horario */}
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`text-sm font-semibold ${theme === 'dark' ? 'text-slate-200' : 'text-gray-800'}`}>1º horario (preferido)</span>
+                  {(formData.fecha_preferida || formData.hora_recomendada || formData.operating_room_id_preferido) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSlot1Seleccionado(null)
+                        setFormData(prev => ({
+                          ...prev,
+                          fecha_preferida: '',
+                          hora_recomendada: '',
+                          hora_fin_recomendada: '',
+                          operating_room_id_preferido: '',
+                        }))
+                      }}
+                      className={`text-sm underline ${theme === 'dark' ? 'text-slate-400 hover:text-slate-200' : 'text-gray-500 hover:text-gray-800'}`}
+                    >
+                      Quitar
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div>
+                    <label className={`block text-xs font-medium mb-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Día</label>
+                    <input
+                      type="date"
+                      value={formData.fecha_preferida || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, fecha_preferida: e.target.value }))}
+                      min={new Date().toISOString().split('T')[0]}
+                      className="input-field mt-0 w-auto min-w-[140px]"
+                    />
+                  </div>
+                  <div>
+                    <label className={`block text-xs font-medium mb-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Pabellón</label>
+                    <select
+                      value={formData.operating_room_id_preferido || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, operating_room_id_preferido: e.target.value || '' }))}
+                      className={`input-field mt-0 w-auto min-w-[140px] ${theme === 'dark' ? 'bg-slate-800 border-slate-600' : ''}`}
+                    >
+                      <option value="">Seleccione</option>
+                      {pabellonesList.map(p => (
+                        <option key={p.id} value={p.id}>{p.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={`block text-xs font-medium mb-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Hora inicio</label>
+                    <select
+                      value={formData.hora_recomendada || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, hora_recomendada: e.target.value }))}
+                      className={`input-field mt-0 w-auto min-w-[90px] ${theme === 'dark' ? 'bg-slate-800 border-slate-600' : ''}`}
+                    >
+                      <option value="">--</option>
+                      {HORAS_SELECT.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={`block text-xs font-medium mb-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Hora fin</label>
+                    <select
+                      value={formData.hora_fin_recomendada || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, hora_fin_recomendada: e.target.value }))}
+                      className={`input-field mt-0 w-auto min-w-[90px] ${theme === 'dark' ? 'bg-slate-800 border-slate-600' : ''}`}
+                    >
+                      <option value="">--</option>
+                      {HORAS_SELECT.filter(h => !formData.hora_recomendada || h > formData.hora_recomendada).map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mostrar "Agregar otro día" solo cuando ya eligió día y hora del 1º */}
+              {formData.fecha_preferida && formData.hora_recomendada && !showSegundoHorario && (
+                <button
+                  type="button"
+                  onClick={() => setShowSegundoHorario(true)}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border ${theme === 'dark' ? 'bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700' : 'bg-white border-slate-300 text-gray-700 hover:bg-slate-100'}`}
+                >
+                  Agregar otro día
+                </button>
+              )}
+
+              {/* 2º horario y más: solo visibles después de "Agregar otro día" */}
+              {showSegundoHorario && (
+              <>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`text-sm font-semibold ${theme === 'dark' ? 'text-slate-200' : 'text-gray-800'}`}>2º horario (alternativa)</span>
+                  {(formData.fecha_preferida_2 || formData.hora_recomendada_2 || formData.operating_room_id_preferido_2) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSlot2Seleccionado(null)
+                        setFormData(prev => ({
+                          ...prev,
+                          fecha_preferida_2: '',
+                          hora_recomendada_2: '',
+                          hora_fin_recomendada_2: '',
+                          operating_room_id_preferido_2: '',
+                        }))
+                        setShowSegundoHorario(false)
+                      }}
+                      className={`text-sm underline ${theme === 'dark' ? 'text-slate-400 hover:text-slate-200' : 'text-gray-500 hover:text-gray-800'}`}
+                    >
+                      Quitar
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div>
+                    <label className={`block text-xs font-medium mb-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Día</label>
+                    <input
+                      type="date"
+                      value={formData.fecha_preferida_2 || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, fecha_preferida_2: e.target.value }))}
+                      min={new Date().toISOString().split('T')[0]}
+                      className="input-field mt-0 w-auto min-w-[140px]"
+                    />
+                  </div>
+                  <div>
+                    <label className={`block text-xs font-medium mb-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Pabellón</label>
+                    <select
+                      value={formData.operating_room_id_preferido_2 || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, operating_room_id_preferido_2: e.target.value || '' }))}
+                      className={`input-field mt-0 w-auto min-w-[140px] ${theme === 'dark' ? 'bg-slate-800 border-slate-600' : ''}`}
+                    >
+                      <option value="">Seleccione</option>
+                      {pabellonesList.map(p => (
+                        <option key={p.id} value={p.id}>{p.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={`block text-xs font-medium mb-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Hora inicio</label>
+                    <select
+                      value={formData.hora_recomendada_2 || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, hora_recomendada_2: e.target.value }))}
+                      className={`input-field mt-0 w-auto min-w-[90px] ${theme === 'dark' ? 'bg-slate-800 border-slate-600' : ''}`}
+                    >
+                      <option value="">--</option>
+                      {HORAS_SELECT.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={`block text-xs font-medium mb-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Hora fin</label>
+                    <select
+                      value={formData.hora_fin_recomendada_2 || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, hora_fin_recomendada_2: e.target.value }))}
+                      className={`input-field mt-0 w-auto min-w-[90px] ${theme === 'dark' ? 'bg-slate-800 border-slate-600' : ''}`}
+                    >
+                      <option value="">--</option>
+                      {HORAS_SELECT.filter(h => !formData.hora_recomendada_2 || h > formData.hora_recomendada_2).map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Horarios extra (3º, 4º, ...) */}
+              {formData.horarios_extra.map((extra, idx) => (
+                <div key={idx} className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`text-sm font-semibold ${theme === 'dark' ? 'text-slate-200' : 'text-gray-800'}`}>
+                      {idx + 3}º horario
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({
+                        ...prev,
+                        horarios_extra: prev.horarios_extra.filter((_, i) => i !== idx),
+                      }))}
+                      className={`text-sm underline ${theme === 'dark' ? 'text-slate-400 hover:text-slate-200' : 'text-gray-500 hover:text-gray-800'}`}
+                    >
+                      Quitar
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-3 items-end">
+                    <div>
+                      <label className={`block text-xs font-medium mb-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Día</label>
+                      <input
+                        type="date"
+                        value={extra.fecha_preferida || ''}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          horarios_extra: prev.horarios_extra.map((h, i) => i === idx ? { ...h, fecha_preferida: e.target.value } : h),
+                        }))}
+                        min={new Date().toISOString().split('T')[0]}
+                        className="input-field mt-0 w-auto min-w-[140px]"
+                      />
+                    </div>
+                    <div>
+                      <label className={`block text-xs font-medium mb-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Pabellón</label>
+                      <select
+                        value={extra.operating_room_id || ''}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          horarios_extra: prev.horarios_extra.map((h, i) => i === idx ? { ...h, operating_room_id: e.target.value || '' } : h),
+                        }))}
+                        className={`input-field mt-0 w-auto min-w-[140px] ${theme === 'dark' ? 'bg-slate-800 border-slate-600' : ''}`}
+                      >
+                        <option value="">Seleccione</option>
+                        {pabellonesList.map(p => (
+                          <option key={p.id} value={p.id}>{p.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={`block text-xs font-medium mb-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Hora inicio</label>
+                      <select
+                        value={extra.hora_recomendada || ''}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          horarios_extra: prev.horarios_extra.map((h, i) => i === idx ? { ...h, hora_recomendada: e.target.value } : h),
+                        }))}
+                        className={`input-field mt-0 w-auto min-w-[90px] ${theme === 'dark' ? 'bg-slate-800 border-slate-600' : ''}`}
+                      >
+                        <option value="">--</option>
+                        {HORAS_SELECT.map(h => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={`block text-xs font-medium mb-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Hora fin</label>
+                      <select
+                        value={extra.hora_fin_recomendada || ''}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          horarios_extra: prev.horarios_extra.map((h, i) => i === idx ? { ...h, hora_fin_recomendada: e.target.value } : h),
+                        }))}
+                        className={`input-field mt-0 w-auto min-w-[90px] ${theme === 'dark' ? 'bg-slate-800 border-slate-600' : ''}`}
+                      >
+                        <option value="">--</option>
+                        {HORAS_SELECT.filter(h => !extra.hora_recomendada || h > extra.hora_recomendada).map(h => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => setFormData(prev => ({
+                  ...prev,
+                  horarios_extra: [...prev.horarios_extra, { fecha_preferida: '', operating_room_id: '', hora_recomendada: '', hora_fin_recomendada: '' }],
+                }))}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border ${theme === 'dark' ? 'bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700' : 'bg-white border-slate-300 text-gray-700 hover:bg-slate-100'}`}
+              >
+                Añadir otra hora
+              </button>
+              </>
+              )}
+            </div>
+            )}
+
             <div className="mt-4">
               <label className="label-field">Observaciones</label>
               <textarea
