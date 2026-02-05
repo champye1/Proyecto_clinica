@@ -15,6 +15,8 @@ export default function LoginDoctor() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  /** 'blocked_account' = aviso por vacaciones o acceso web deshabilitado (mensaje claro para el doctor) */
+  const [errorType, setErrorType] = useState(null)
   const [lockoutInfo, setLockoutInfo] = useState(null)
   const navigate = useNavigate()
 
@@ -39,6 +41,7 @@ export default function LoginDoctor() {
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setErrorType(null)
 
     try {
       // Verificar si está bloqueado (usar el identificador ingresado)
@@ -159,13 +162,19 @@ export default function LoginDoctor() {
       }
 
       if (!doctorData.acceso_web_enabled) {
+        setErrorType('blocked_account')
+        setError('Su cuenta no tiene acceso web habilitado. Solo el administrador (Pabellón) puede activarlo. Contacte a la clínica si necesita ingresar al portal.')
+        setLoading(false)
         await supabase.auth.signOut()
-        throw new Error('Su acceso web no está habilitado. Contacte al administrador.')
+        return
       }
 
       if (doctorData.estado === 'vacaciones') {
+        setErrorType('blocked_account')
+        setError('Su cuenta está en modo vacaciones. No puede acceder al sistema hasta que un administrador cambie su estado a activo. Contacte a la clínica si necesita ingresar.')
+        setLoading(false)
         await supabase.auth.signOut()
-        throw new Error('Su cuenta está en estado de vacaciones. No puede acceder al sistema.')
+        return
       }
 
       // Esperar un momento para que App.jsx detecte el cambio de autenticación
@@ -175,6 +184,7 @@ export default function LoginDoctor() {
       window.location.href = '/doctor'
     } catch (err) {
       sessionStorage.removeItem('validating_login')
+      setErrorType(null)
       setError(err.message || 'Error al iniciar sesión')
     } finally {
       setLoading(false)
@@ -213,9 +223,22 @@ export default function LoginDoctor() {
           )}
 
           {error && (
-            <div className="bg-red-50 border-2 border-red-200 text-red-700 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl flex items-center gap-2 animate-in fade-in duration-300">
-              <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-              <span className="text-[10px] sm:text-xs font-bold break-words">{error}</span>
+            <div
+              className={`px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl flex items-start gap-2 animate-in fade-in duration-300 ${
+                errorType === 'blocked_account'
+                  ? 'bg-amber-50 border-2 border-amber-300 text-amber-900'
+                  : 'bg-red-50 border-2 border-red-200 text-red-700'
+              }`}
+            >
+              <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 mt-0.5" />
+              <div className="flex flex-col gap-0.5">
+                {errorType === 'blocked_account' && (
+                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-amber-700">
+                    Aviso: no puede acceder al portal
+                  </span>
+                )}
+                <span className="text-[10px] sm:text-xs font-bold break-words">{error}</span>
+              </div>
             </div>
           )}
 
