@@ -180,7 +180,7 @@ export default function Insumos() {
     },
   })
 
-  // Validar código único en tiempo real
+  // Validar solo que el código no esté duplicado (código libre por clínica)
   const validarCodigo = async (codigo) => {
     if (!codigo || codigo.trim() === '') {
       setCodigoError('')
@@ -190,13 +190,14 @@ export default function Insumos() {
     const { data: insumoExistente, error: errorBusqueda } = await supabase
       .from('supplies')
       .select('id')
-      .eq('codigo', codigo)
+      .eq('codigo', codigo.trim())
       .neq('id', insumoEditando?.id || '')
       .is('deleted_at', null)
       .maybeSingle()
     
+    // Si falla la consulta (red, RLS, etc.) no bloquear: el código queda libre
     if (errorBusqueda) {
-      setCodigoError('Error al validar código')
+      setCodigoError('')
       return
     }
     
@@ -210,32 +211,29 @@ export default function Insumos() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    // Validar código único antes de crear/actualizar
+    // Validar solo duplicado; si la consulta falla no bloquear (código libre por clínica)
     if (codigoError) {
       showError(codigoError)
       return
     }
 
+    const codigoTrim = (formData.codigo || '').trim()
     const { data: insumoExistente, error: errorBusqueda } = await supabase
       .from('supplies')
       .select('id')
-      .eq('codigo', formData.codigo)
+      .eq('codigo', codigoTrim)
       .neq('id', insumoEditando?.id || '')
       .is('deleted_at', null)
       .maybeSingle()
     
-    if (errorBusqueda) {
-      showError('Error al validar código: ' + errorBusqueda.message)
-      return
-    }
-    
-    if (insumoExistente) {
+    if (!errorBusqueda && insumoExistente) {
       showError('El código ya existe para otro insumo')
       return
     }
     
     const payload = {
       ...formData,
+      codigo: codigoTrim,
       proveedor: (formData.proveedor || '').trim() || null,
       grupos_fonasa: (formData.grupos_fonasa || '').trim() || null,
       stock_actual: 0,

@@ -176,7 +176,8 @@ export function sanitizeRut(input) {
 }
 
 /**
- * Sanitiza un código (solo permite letras, números y guiones)
+ * Sanitiza un código de insumo. Libre para que cada clínica use su formato
+ * (ej. ins-013, ABC.123, 001). Solo se eliminan caracteres de control y riesgosos.
  * @param {string} input - String a sanitizar
  * @returns {string} - String sanitizado para código
  */
@@ -184,8 +185,8 @@ export function sanitizeCode(input) {
   if (typeof input !== 'string') {
     return input
   }
-  // Solo permite letras, números y guiones
-  return input.replace(/[^a-zA-Z0-9-]/g, '')
+  // Permite letras, números, guiones, guiones bajos, puntos, barras y espacios
+  return input.replace(/[\x00-\x1F\x7F]/g, '')
 }
 
 /**
