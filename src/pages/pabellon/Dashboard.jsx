@@ -117,16 +117,24 @@ export default function Dashboard() {
     },
   })
 
-  // Ocupación del día
+  // Ocupación del día (incluye pabellones con cirugía y pabellones bloqueados por convenio)
+  const hoy = format(new Date(), 'yyyy-MM-dd')
   const { data: ocupacion, isLoading: isLoadingOcupacion } = useQuery({
-    queryKey: ['ocupacion-hoy'],
+    queryKey: ['ocupacion-hoy', hoy],
     queryFn: async () => {
       const { data: cirugias } = await supabase
         .from('surgeries')
-        .select('hora_inicio, hora_fin, operating_room_id')
-        .eq('fecha', format(new Date(), 'yyyy-MM-dd'))
+        .select('operating_room_id')
+        .eq('fecha', hoy)
         .is('deleted_at', null)
         .in('estado', ['programada', 'en_proceso'])
+
+      const { data: bloqueos } = await supabase
+        .from('schedule_blocks')
+        .select('operating_room_id')
+        .eq('fecha', hoy)
+        .is('deleted_at', null)
+        .or(`vigencia_hasta.is.null,vigencia_hasta.gte.${hoy}`)
 
       const { data: pabellones } = await supabase
         .from('operating_rooms')
@@ -135,8 +143,12 @@ export default function Dashboard() {
         .is('deleted_at', null)
 
       const totalPabellones = pabellones?.length || 0
-      const pabellonesOcupados = new Set(cirugias?.map(c => c.operating_room_id) || []).size
-      const porcentajeOcupacion = totalPabellones > 0 
+      const idsOcupadosOBloqueados = new Set([
+        ...(cirugias?.map(c => c.operating_room_id) || []),
+        ...(bloqueos?.map(b => b.operating_room_id) || []),
+      ])
+      const pabellonesOcupados = idsOcupadosOBloqueados.size
+      const porcentajeOcupacion = totalPabellones > 0
         ? Math.round((pabellonesOcupados / totalPabellones) * 100)
         : 0
 

@@ -28,7 +28,7 @@ import { useNotificationsList } from '../hooks/useNotificationsList'
 
 const menuItems = [
   { path: '/doctor', icon: LayoutDashboard, label: 'Panel Principal' },
-  { path: '/doctor/paciente', icon: UserPlus, label: 'Crear Paciente' },
+  { path: '/doctor/paciente', icon: UserPlus, label: 'Reservar hora' },
   { path: '/doctor/solicitudes', icon: FileText, label: 'Mis Solicitudes' },
   { path: '/doctor/horarios', icon: LayoutGrid, label: 'Horarios pabellones' },
   { path: '/doctor/calendario', icon: Calendar, label: 'Mi Calendario' },

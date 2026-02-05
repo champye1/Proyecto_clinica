@@ -467,13 +467,21 @@ const DayView = ({ day, pabellones, cirugias, bloqueos, onSlotSelect, selectedSl
       return { status: 'occupied', data: cirugia }
     }
     
-    // Verificar bloqueos por convenio
-    const bloqueo = bloqueosList.find(b => 
-      b.operating_room_id === pabellon.id &&
-      b.fecha === format(selectedDay, 'yyyy-MM-dd') &&
-      (!b.hora_inicio || b.hora_inicio <= time + ':00') &&
-      (!b.hora_fin || b.hora_fin > time + ':00')
-    )
+    // Verificar bloqueos por convenio (fecha y vigencia; comparar horas normalizadas)
+    const fechaDia = format(selectedDay, 'yyyy-MM-dd')
+    const slotTime = time.length === 5 ? time : time + ':00' // "15:00"
+    const bloqueo = bloqueosList.find(b => {
+      const f = typeof b.fecha === 'string' ? b.fecha.slice(0, 10) : format(new Date(b.fecha), 'yyyy-MM-dd')
+      if (b.operating_room_id !== pabellon.id || f !== fechaDia) return false
+      if (b.vigencia_hasta) {
+        const vig = typeof b.vigencia_hasta === 'string' ? b.vigencia_hasta.slice(0, 10) : format(new Date(b.vigencia_hasta), 'yyyy-MM-dd')
+        if (vig < fechaDia) return false
+      }
+      const hin = (b.hora_inicio && typeof b.hora_inicio === 'string') ? b.hora_inicio.slice(0, 5) : b.hora_inicio
+      const hfn = (b.hora_fin && typeof b.hora_fin === 'string') ? b.hora_fin.slice(0, 5) : b.hora_fin
+      if (!hin || !hfn) return true
+      return hin <= slotTime && hfn > slotTime
+    })
     
     if (bloqueo) {
       return { status: 'blocked_agreement', data: bloqueo }
@@ -1387,13 +1395,13 @@ export default function Calendario() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('schedule_blocks')
-        .select('id, fecha, operating_room_id')
+        .select('id, fecha, operating_room_id, hora_inicio, hora_fin, vigencia_hasta')
         .gte('fecha', fechaInicioStr)
         .lte('fecha', fechaFinStr)
         .is('deleted_at', null)
 
       if (error) throw error
-      return data
+      return data || []
     },
   })
 

@@ -25,6 +25,8 @@ export default function CalendarioPabellonesGrid({ theme, inlineMode = false, on
   const [fecha, setFecha] = useState(initialFecha && initialFecha >= hoy ? initialFecha : hoy)
   const [selectedSlots, setSelectedSlots] = useState([])
   const [primerHorario, setPrimerHorario] = useState(null)
+  // Filtro de pabellón: vacío = todos; si se elige uno, solo se muestra ese (mejor en móvil)
+  const [pabellonFiltroId, setPabellonFiltroId] = useState('')
 
   const { data: pabellonesList = [], isLoading: loadingPabellones } = useQuery({
     queryKey: ['operating-rooms-horarios'],
@@ -132,6 +134,12 @@ export default function CalendarioPabellonesGrid({ theme, inlineMode = false, on
   const isDark = theme === 'dark'
   const isLoading = loadingPabellones || (!!fecha && fecha >= hoy && loadingSlots)
   const hayPabellones = pabellonesList.length > 0
+  // Si hay filtro de pabellón, mostrar solo ese; si no, todos (para móvil conviene elegir uno)
+  const pabellonesMostrar = useMemo(() => {
+    if (!pabellonFiltroId) return pabellonesList
+    const p = pabellonesList.find(x => x.id === pabellonFiltroId)
+    return p ? [p] : pabellonesList
+  }, [pabellonesList, pabellonFiltroId])
 
   return (
     <div className="space-y-4">
@@ -139,18 +147,36 @@ export default function CalendarioPabellonesGrid({ theme, inlineMode = false, on
         <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
           Horarios disponibles por pabellón
         </h3>
-        <div className="flex items-center gap-2">
-          <Calendar className={`w-5 h-5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
-          <label className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
-            {primerHorario ? 'Día del 2º horario:' : 'Día:'}
-          </label>
-          <input
-            type="date"
-            value={fecha}
-            onChange={(e) => { setFecha(e.target.value); setSelectedSlots([]) }}
-            min={hoy}
-            className={`input-field w-auto ${isDark ? 'bg-slate-800 border-slate-600 text-white' : ''}`}
-          />
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Calendar className={`w-5 h-5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
+            <label className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
+              {primerHorario ? 'Día del 2º horario:' : 'Día:'}
+            </label>
+            <input
+              type="date"
+              value={fecha}
+              onChange={(e) => { setFecha(e.target.value); setSelectedSlots([]) }}
+              min={hoy}
+              className={`input-field w-auto ${isDark ? 'bg-slate-800 border-slate-600 text-white' : ''}`}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className={`text-sm whitespace-nowrap ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
+              Pabellón:
+            </label>
+            <select
+              value={pabellonFiltroId}
+              onChange={(e) => { setPabellonFiltroId(e.target.value); setSelectedSlots([]) }}
+              className={`input-field w-auto min-w-[140px] ${isDark ? 'bg-slate-800 border-slate-600 text-white' : ''}`}
+              aria-label="Seleccionar pabellón a ver"
+            >
+              <option value="">Todos</option>
+              {pabellonesList.map(p => (
+                <option key={p.id} value={p.id}>{p.nombre}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -170,7 +196,7 @@ export default function CalendarioPabellonesGrid({ theme, inlineMode = false, on
       )}
 
       <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
-        Vista detallada del día: vea en qué pabellón y a qué hora está disponible cada slot. Puede elegir un horario y luego otro día para el segundo.
+        Seleccione día y pabellón. Vista detallada del día: vea a qué hora está disponible cada slot. Puede elegir un horario y luego otro día para el segundo.
       </p>
 
       <div className={`flex flex-wrap gap-4 text-sm ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
@@ -189,11 +215,11 @@ export default function CalendarioPabellonesGrid({ theme, inlineMode = false, on
       ) : (
         <div className={`rounded-xl border overflow-hidden ${isDark ? 'bg-slate-800/50 border-slate-600' : 'bg-white border-slate-200'}`}>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse min-w-[500px]" role="grid" aria-label="Vista detallada del día por pabellón">
+            <table className={`w-full border-collapse ${pabellonesMostrar.length === 1 ? 'min-w-0' : 'min-w-[500px]'}`} role="grid" aria-label="Vista detallada del día por pabellón">
               <thead>
                 <tr className={isDark ? 'border-b border-slate-600 bg-slate-800' : 'border-b border-slate-200 bg-slate-50'}>
                   <th className={`w-16 py-3 px-2 text-left text-xs font-bold uppercase ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>Hora</th>
-                  {pabellonesList.map(p => (
+                  {pabellonesMostrar.map(p => (
                     <th key={p.id} className={`py-3 px-2 text-center font-semibold ${isDark ? 'text-slate-200' : 'text-gray-800'}`}>
                       <div>{p.nombre}</div>
                       <div className={`text-xs font-normal ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
@@ -207,7 +233,7 @@ export default function CalendarioPabellonesGrid({ theme, inlineMode = false, on
                 {HORAS.map(hora => (
                   <tr key={hora} className={isDark ? 'border-b border-slate-700/50' : 'border-b border-slate-100'}>
                     <td className={`py-2 px-2 text-sm font-medium sticky left-0 ${isDark ? 'bg-slate-800/80 text-slate-300' : 'bg-slate-50/90 text-gray-700'}`}>{hora}</td>
-                    {pabellonesList.map(p => {
+                    {pabellonesMostrar.map(p => {
                       const roomData = grid[p.id]
                       const nombre = roomData?.nombre ?? p.nombre
                       const estado = roomData?.slots[hora] ?? 'libre'

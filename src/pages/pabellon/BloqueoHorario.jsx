@@ -1,10 +1,12 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../config/supabase'
-import { Calendar, Clock, Users, X, Edit } from 'lucide-react'
+import { Calendar, Clock, Users, X, Edit, CheckCircle, XCircle, Lock } from 'lucide-react'
 import { useNotifications } from '../../hooks/useNotifications'
 import { sanitizeString } from '../../utils/sanitizeInput'
 import { HORAS_SELECT } from '../../utils/horasOpciones'
+
+const HORAS_PARA_PREVIEW = HORAS_SELECT
 import Pagination from '../../components/common/Pagination'
 import ConfirmModal from '../../components/common/ConfirmModal'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
@@ -80,7 +82,7 @@ export default function BloqueoHorario() {
 
   // Consultar cirugías para validar solapamiento
   const { data: cirugias = [] } = useQuery({
-    queryKey: ['cirugias-validacion', formData.fecha],
+    queryKey: ['cirugias-validacion', formData.fecha, formData.operating_room_id],
     queryFn: async () => {
       if (!formData.fecha || !formData.operating_room_id) return []
       
@@ -98,6 +100,33 @@ export default function BloqueoHorario() {
     enabled: !!formData.fecha && !!formData.operating_room_id,
   })
 
+  // Estado por hora para el día y pabellón seleccionados (para mostrar horarios disponibles)
+  const estadoPorHora = useMemo(() => {
+    if (!formData.fecha || !formData.operating_room_id) return {}
+    const map = {}
+    HORAS_PARA_PREVIEW.forEach(h => { map[h] = 'libre' })
+    cirugias.forEach(c => {
+      const hi = (c.hora_inicio || '').slice(0, 5)
+      const hf = (c.hora_fin || '').slice(0, 5)
+      HORAS_PARA_PREVIEW.forEach(h => {
+        if (h >= hi && h < hf) map[h] = 'ocupado'
+      })
+    })
+    const bloqueosDia = bloqueos.filter(b =>
+      b.fecha === formData.fecha &&
+      b.operating_room_id === formData.operating_room_id &&
+      b.id !== bloqueoEditando?.id
+    )
+    bloqueosDia.forEach(b => {
+      const hi = (b.hora_inicio || '').slice(0, 5)
+      const hf = (b.hora_fin || '').slice(0, 5)
+      HORAS_PARA_PREVIEW.forEach(h => {
+        if (h >= hi && h < hf) map[h] = 'bloqueado'
+      })
+    })
+    return map
+  }, [formData.fecha, formData.operating_room_id, cirugias, bloqueos, bloqueoEditando?.id])
+
   const crearBloqueo = useMutation({
     mutationFn: async (data) => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -114,6 +143,8 @@ export default function BloqueoHorario() {
     onSuccess: () => {
       queryClient.invalidateQueries(['bloqueos'])
       queryClient.invalidateQueries(['cirugias-validacion'])
+      queryClient.invalidateQueries({ queryKey: ['calendario-anual-bloqueos'] })
+      queryClient.invalidateQueries({ queryKey: ['ocupacion-hoy'] })
       setFormData({
         doctor_id: '',
         operating_room_id: '',
@@ -148,6 +179,8 @@ export default function BloqueoHorario() {
     onSuccess: () => {
       queryClient.invalidateQueries(['bloqueos'])
       queryClient.invalidateQueries(['cirugias-validacion'])
+      queryClient.invalidateQueries({ queryKey: ['calendario-anual-bloqueos'] })
+      queryClient.invalidateQueries({ queryKey: ['ocupacion-hoy'] })
       setFormData({
         doctor_id: '',
         operating_room_id: '',
@@ -182,6 +215,8 @@ export default function BloqueoHorario() {
     onSuccess: () => {
       queryClient.invalidateQueries(['bloqueos'])
       queryClient.invalidateQueries(['cirugias-validacion'])
+      queryClient.invalidateQueries({ queryKey: ['calendario-anual-bloqueos'] })
+      queryClient.invalidateQueries({ queryKey: ['ocupacion-hoy'] })
       showSuccess('Bloqueo eliminado exitosamente')
     },
     onError: (error) => {
@@ -393,11 +428,56 @@ export default function BloqueoHorario() {
                 type="date"
                 value={formData.fecha}
                 onChange={(e) => setFormData({ ...formData, fecha: sanitizeString(e.target.value) })}
-                className="input-field"
+                className="input-field w-full"
                 required
                 min={new Date().toISOString().split('T')[0]}
               />
+              <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>
+                Elija fecha y pabellón para ver abajo los horarios disponibles u ocupados.
+              </p>
             </div>
+
+            {/* Horarios del día: solo se muestra cuando hay fecha y pabellón */}
+            {formData.fecha && formData.operating_room_id && (
+              <div className={`rounded-xl border-2 p-4 ${theme === 'dark' ? 'bg-slate-800/50 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
+                <h3 className={`text-sm font-bold mb-3 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                  <Clock className="w-4 h-4" />
+                  Horarios del día ({formData.fecha}) — {pabellones.find(p => p.id === formData.operating_room_id)?.nombre || 'Pabellón'}
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {HORAS_PARA_PREVIEW.map(h => {
+                    const estado = estadoPorHora[h] || 'libre'
+                    return (
+                      <span
+                        key={h}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold ${
+                          estado === 'libre'
+                            ? theme === 'dark'
+                              ? 'bg-green-900/50 text-green-300 border border-green-600/50'
+                              : 'bg-green-100 text-green-800 border border-green-300'
+                            : estado === 'ocupado'
+                            ? theme === 'dark'
+                              ? 'bg-red-900/50 text-red-300 border border-red-600/50'
+                              : 'bg-red-100 text-red-800 border border-red-300'
+                            : theme === 'dark'
+                            ? 'bg-amber-900/50 text-amber-300 border border-amber-600/50'
+                            : 'bg-amber-100 text-amber-800 border border-amber-300'
+                        }`}
+                        title={estado === 'libre' ? 'Disponible para bloquear' : estado === 'ocupado' ? 'Ocupado por cirugía' : 'Ya bloqueado'}
+                      >
+                        {estado === 'libre' && <CheckCircle className="w-3.5 h-3.5" />}
+                        {estado === 'ocupado' && <XCircle className="w-3.5 h-3.5" />}
+                        {estado === 'bloqueado' && <Lock className="w-3.5 h-3.5" />}
+                        {h}
+                      </span>
+                    )
+                  })}
+                </div>
+                <p className={`text-xs mt-2 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>
+                  Verde = disponible · Rojo = ocupado (cirugía) · Amarillo = ya bloqueado. Elija Hora Inicio y Hora Fin entre las verdes.
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -405,7 +485,7 @@ export default function BloqueoHorario() {
                 <select
                   value={formData.hora_inicio ? String(formData.hora_inicio).slice(0, 5) : ''}
                   onChange={(e) => setFormData({ ...formData, hora_inicio: e.target.value })}
-                  className="input-field"
+                  className="input-field w-full"
                   required
                 >
                   <option value="">Seleccione hora</option>
@@ -420,7 +500,7 @@ export default function BloqueoHorario() {
                 <select
                   value={formData.hora_fin ? String(formData.hora_fin).slice(0, 5) : ''}
                   onChange={(e) => setFormData({ ...formData, hora_fin: e.target.value })}
-                  className="input-field"
+                  className="input-field w-full"
                   required
                 >
                   <option value="">Seleccione hora</option>

@@ -45,11 +45,12 @@ export default function Insumos() {
         .is('deleted_at', null)
         .order('nombre', { ascending: true })
 
-      if (debouncedBusqueda) {
+      const termino = debouncedBusqueda.trim()
+      if (termino) {
         if (filtroTipo === 'codigo') {
-          query = query.ilike('codigo', `%${debouncedBusqueda}%`)
+          query = query.ilike('codigo', `%${termino}%`)
         } else {
-          query = query.ilike('nombre', `%${debouncedBusqueda}%`)
+          query = query.ilike('nombre', `%${termino}%`)
         }
       }
 
@@ -187,13 +188,15 @@ export default function Insumos() {
       return
     }
 
-    const { data: insumoExistente, error: errorBusqueda } = await supabase
+    let query = supabase
       .from('supplies')
       .select('id')
       .eq('codigo', codigo.trim())
-      .neq('id', insumoEditando?.id || '')
       .is('deleted_at', null)
-      .maybeSingle()
+    if (insumoEditando?.id) {
+      query = query.neq('id', insumoEditando.id)
+    }
+    const { data: insumoExistente, error: errorBusqueda } = await query.maybeSingle()
     
     // Si falla la consulta (red, RLS, etc.) no bloquear: el código queda libre
     if (errorBusqueda) {
@@ -218,13 +221,15 @@ export default function Insumos() {
     }
 
     const codigoTrim = (formData.codigo || '').trim()
-    const { data: insumoExistente, error: errorBusqueda } = await supabase
+    let queryCodigo = supabase
       .from('supplies')
       .select('id')
       .eq('codigo', codigoTrim)
-      .neq('id', insumoEditando?.id || '')
       .is('deleted_at', null)
-      .maybeSingle()
+    if (insumoEditando?.id) {
+      queryCodigo = queryCodigo.neq('id', insumoEditando.id)
+    }
+    const { data: insumoExistente, error: errorBusqueda } = await queryCodigo.maybeSingle()
     
     if (!errorBusqueda && insumoExistente) {
       showError('El código ya existe para otro insumo')
@@ -332,7 +337,7 @@ export default function Insumos() {
               <input
                 type="text"
                 value={busqueda}
-                onChange={(e) => setBusqueda(sanitizeString(e.target.value))}
+                onChange={(e) => setBusqueda(sanitizeString(e.target.value, { trim: false }))}
                 placeholder={`Buscar por ${filtroTipo === 'codigo' ? 'código' : 'nombre'}...`}
                 className="input-field pl-10"
               />
