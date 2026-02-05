@@ -7,6 +7,14 @@ export default function Inicio() {
   const navigate = useNavigate()
   const [connectionStatus, setConnectionStatus] = useState(null)
   const [checking, setChecking] = useState(true)
+  const [sessionExpired, setSessionExpired] = useState(false)
+
+  useEffect(() => {
+    if (sessionStorage.getItem('session_expired') === '1') {
+      sessionStorage.removeItem('session_expired')
+      setSessionExpired(true)
+    }
+  }, [])
 
   useEffect(() => {
     const checkConnection = async () => {
@@ -32,6 +40,17 @@ export default function Inicio() {
           <p className="text-lg sm:text-xl text-slate-600 font-bold px-4">Clínica Privada Viña del Mar</p>
           <p className="text-slate-400 text-[10px] sm:text-xs font-black uppercase tracking-widest mt-2 px-4">Selecciona tu tipo de acceso</p>
         </div>
+
+        {/* Aviso sesión expirada (ej. token de refresco inválido al abrir localhost) */}
+        {sessionExpired && (
+          <div className="bg-amber-50 border-2 border-amber-200 text-amber-800 rounded-2xl sm:rounded-[2.5rem] p-4 sm:p-5 mb-4 sm:mb-6 flex items-start gap-3 shadow-sm animate-in fade-in duration-300">
+            <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-black text-xs sm:text-sm uppercase tracking-tighter mb-1">Sesión expirada</h3>
+              <p className="text-[10px] sm:text-xs font-bold">Tu sesión anterior ya no es válida. Ingresa de nuevo con tu usuario y contraseña.</p>
+            </div>
+          </div>
+        )}
 
         {/* Estado de conexión */}
         {checking ? (

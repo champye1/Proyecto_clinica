@@ -24,27 +24,41 @@ function AppContent() {
   const [userRole, setUserRole] = useState(null)
 
   useEffect(() => {
-    // Verificar sesión inicial; si hay token de refresco inválido, limpiar sesión
-    supabase.auth
-      .getSession()
-      .then(({ data: { session } }) => {
-        setUser(session?.user ?? null)
-        if (session?.user) {
-          fetchUserRole(session.user.id)
+    // Validar sesión con el servidor (getUser refresca el token; getSession solo lee almacenamiento)
+    // Así capturamos "Invalid Refresh Token" al cargar y limpiamos sin mostrar error en consola
+    const initAuth = async () => {
+      try {
+        const { data: { user: currentUser }, error } = await supabase.auth.getUser()
+        if (error) {
+          if (isInvalidRefreshTokenError(error)) {
+            logger.warn('Token de refresco inválido o no encontrado. Limpiando sesión.')
+            await supabase.auth.signOut()
+            sessionStorage.setItem('session_expired', '1')
+          }
+          setUser(null)
+          setUserRole(null)
+          setLoading(false)
+          return
+        }
+        setUser(currentUser ?? null)
+        if (currentUser) {
+          fetchUserRole(currentUser.id)
         } else {
           setUserRole(null)
           setLoading(false)
         }
-      })
-      .catch(async (err) => {
+      } catch (err) {
         if (isInvalidRefreshTokenError(err)) {
-          logger.warn('Token de refresco inválido o no encontrado. Limpiando sesión.')
+          logger.warn('Token de refresco inválido. Limpiando sesión.')
           await supabase.auth.signOut()
+          sessionStorage.setItem('session_expired', '1')
         }
         setUser(null)
         setUserRole(null)
         setLoading(false)
-      })
+      }
+    }
+    initAuth()
 
     // Escuchar cambios de autenticación
     const {
