@@ -13,6 +13,8 @@ import ConfirmModal from '../../components/common/ConfirmModal'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import CalendarioPabellonesGrid from '../../components/CalendarioPabellonesGrid'
 import { HORAS_SELECT } from '../../utils/horasOpciones'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
 
 export default function CrearPaciente() {
   const [formData, setFormData] = useState({
@@ -318,11 +320,21 @@ export default function CrearPaciente() {
       setSlot2Seleccionado(null)
       setShowSegundoHorario(false)
       setRutError('')
-      showSuccess(
-        variables?.dejar_fecha_a_pabellon
-          ? 'Solicitud creada. Pabellón asignará fecha y hora.'
-          : 'Solicitud creada exitosamente. El horario quedó guardado para este paciente.'
-      )
+      let mensaje = 'Solicitud creada.'
+      if (variables?.dejar_fecha_a_pabellon) {
+        mensaje = 'Solicitud creada. Pabellón asignará fecha y hora.'
+      } else if (variables?.fecha_preferida) {
+        try {
+          const fechaReserva = new Date(variables.fecha_preferida + 'T12:00:00')
+          const diaYFecha = format(fechaReserva, "EEEE d 'de' MMMM 'de' yyyy", { locale: es })
+          mensaje = `Se creó una reserva para este día: ${diaYFecha.charAt(0).toUpperCase() + diaYFecha.slice(1)}.`
+        } catch {
+          mensaje = 'Solicitud creada exitosamente. El horario quedó guardado para este paciente.'
+        }
+      } else {
+        mensaje = 'Solicitud creada exitosamente. El horario quedó guardado para este paciente.'
+      }
+      showSuccess(mensaje)
       // Redirigir a Horarios pabellones con la fecha del horario para que vea el slot como "Solicitado" (solo si eligió horario)
       if (variables?.fecha_preferida && !variables?.dejar_fecha_a_pabellon) {
         navigate('/doctor/horarios', { state: { fecha: variables.fecha_preferida }, replace: true })

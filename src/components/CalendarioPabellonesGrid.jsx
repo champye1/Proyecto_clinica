@@ -63,7 +63,11 @@ export default function CalendarioPabellonesGrid({ theme, inlineMode = false, on
     queryKey: ['estado-slots-pabellon', fecha],
     queryFn: async () => {
       const { data, error } = await supabase.rpc('get_estado_slots_pabellon', { p_fecha: fecha })
-      if (error) throw error
+      if (error) {
+        // Si la función RPC no existe (404) o falla, no bloquear: mostrar slots vacíos y permitir crear reserva
+        console.warn('get_estado_slots_pabellon:', error.message)
+        return []
+      }
       return data || []
     },
     enabled: isValidFecha(fecha) && fecha >= hoy,
