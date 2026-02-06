@@ -249,24 +249,26 @@ export default function CrearPaciente() {
       }
 
       // Crear solicitud quirúrgica (usando el paciente existente o nuevo)
+      const dejarAPabellon = Boolean(data.dejar_fecha_a_pabellon)
+      const payloadSolicitud = {
+        doctor_id: doctor.id,
+        patient_id: paciente.id,
+        codigo_operacion: data.codigo_operacion,
+        observaciones: data.observaciones || null,
+        dejar_fecha_a_pabellon: dejarAPabellon,
+        hora_recomendada: dejarAPabellon ? null : (data.hora_recomendada || null),
+        hora_fin_recomendada: dejarAPabellon ? null : (data.hora_fin_recomendada || null),
+        fecha_preferida: dejarAPabellon ? null : (data.fecha_preferida || null),
+        operating_room_id_preferido: dejarAPabellon ? null : (data.operating_room_id_preferido || null),
+        hora_recomendada_2: dejarAPabellon ? null : (data.hora_recomendada_2 || null),
+        hora_fin_recomendada_2: dejarAPabellon ? null : (data.hora_fin_recomendada_2 || null),
+        fecha_preferida_2: dejarAPabellon ? null : (data.fecha_preferida_2 || null),
+        operating_room_id_preferido_2: dejarAPabellon ? null : (data.operating_room_id_preferido_2 || null),
+        horarios_preferidos_extra: (data.horarios_extra?.length ? data.horarios_extra : null),
+      }
       const { data: solicitud, error: solicitudError } = await supabase
         .from('surgery_requests')
-        .insert({
-          doctor_id: doctor.id,
-          patient_id: paciente.id,
-          codigo_operacion: data.codigo_operacion,
-          hora_recomendada: data.hora_recomendada || null,
-          hora_fin_recomendada: data.hora_fin_recomendada || null,
-          fecha_preferida: data.fecha_preferida || null,
-          operating_room_id_preferido: data.operating_room_id_preferido || null,
-          hora_recomendada_2: data.hora_recomendada_2 || null,
-          hora_fin_recomendada_2: data.hora_fin_recomendada_2 || null,
-          fecha_preferida_2: data.fecha_preferida_2 || null,
-          operating_room_id_preferido_2: data.operating_room_id_preferido_2 || null,
-          dejar_fecha_a_pabellon: data.dejar_fecha_a_pabellon === true,
-          horarios_preferidos_extra: data.horarios_extra?.length ? data.horarios_extra : null,
-          observaciones: data.observaciones || null,
-        })
+        .insert(payloadSolicitud)
         .select()
         .single()
 
@@ -292,6 +294,8 @@ export default function CrearPaciente() {
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries(['solicitudes-doctor-pendientes'])
       queryClient.invalidateQueries({ queryKey: ['estado-slots-pabellon'] })
+      queryClient.invalidateQueries(['solicitudes'])
+      queryClient.invalidateQueries(['solicitudes-pendientes'])
       setFormData({
         nombre: '',
         apellido: '',
@@ -314,9 +318,13 @@ export default function CrearPaciente() {
       setSlot2Seleccionado(null)
       setShowSegundoHorario(false)
       setRutError('')
-      showSuccess('Solicitud creada exitosamente. El horario quedó guardado para este paciente.')
-      // Redirigir a Horarios pabellones con la fecha del horario para que vea el slot como "Solicitado"
-      if (variables?.fecha_preferida) {
+      showSuccess(
+        variables?.dejar_fecha_a_pabellon
+          ? 'Solicitud creada. Pabellón asignará fecha y hora.'
+          : 'Solicitud creada exitosamente. El horario quedó guardado para este paciente.'
+      )
+      // Redirigir a Horarios pabellones con la fecha del horario para que vea el slot como "Solicitado" (solo si eligió horario)
+      if (variables?.fecha_preferida && !variables?.dejar_fecha_a_pabellon) {
         navigate('/doctor/horarios', { state: { fecha: variables.fecha_preferida }, replace: true })
       }
     },
@@ -608,7 +616,28 @@ export default function CrearPaciente() {
                   inlineMode
                   onCerrar={() => setShowCalendarioGrid(false)}
                   onConfirm={(payload) => {
-                    if (payload.slot1) {
+                    if (!payload.slot1) {
+                      setShowCalendarioGrid(false)
+                      return
+                    }
+                    const yaTienePrimerHorario = formData.fecha_preferida && formData.hora_recomendada
+                    const eligioSoloUnSlot = !payload.slot2
+                    if (yaTienePrimerHorario && eligioSoloUnSlot) {
+                      setFormData(prev => ({
+                        ...prev,
+                        fecha_preferida_2: payload.fechaPreferida || '',
+                        hora_recomendada_2: payload.slot1.horaInicio || '',
+                        hora_fin_recomendada_2: payload.slot1.horaFin || '',
+                        operating_room_id_preferido_2: payload.slot1.operating_room_id || '',
+                      }))
+                      setSlot2Seleccionado({
+                        operating_room_id: payload.slot1.operating_room_id,
+                        nombre_pabellon: payload.slot1.nombrePabellon || '',
+                        hora_inicio: payload.slot1.horaInicio,
+                        hora_fin: payload.slot1.horaFin,
+                      })
+                      setShowSegundoHorario(true)
+                    } else {
                       setFormData(prev => ({
                         ...prev,
                         fecha_preferida: payload.fechaPreferida || '',
@@ -632,6 +661,7 @@ export default function CrearPaciente() {
                         hora_inicio: payload.slot2.horaInicio,
                         hora_fin: payload.slot2.horaFin,
                       } : null)
+                      if (payload.slot2) setShowSegundoHorario(true)
                     }
                     setShowCalendarioGrid(false)
                   }}
@@ -707,11 +737,14 @@ export default function CrearPaciente() {
                 </button>
               </div>
 
-              {/* Mostrar "Agregar otro día" solo cuando ya tiene 1º fijado */}
+              {/* Mostrar "Agregar otro día" solo cuando ya tiene 1º fijado; al pulsar se abre el panel de horarios */}
               {formData.fecha_preferida && formData.hora_recomendada && !showSegundoHorario && (
                 <button
                   type="button"
-                  onClick={() => setShowSegundoHorario(true)}
+                  onClick={() => {
+                    setShowSegundoHorario(true)
+                    setShowCalendarioGrid(true)
+                  }}
                   className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border ${theme === 'dark' ? 'bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700' : 'bg-white border-slate-300 text-gray-700 hover:bg-slate-100'}`}
                 >
                   Agregar otro día

@@ -11,6 +11,23 @@ for (let i = 8; i <= 17; i++) {
   HORAS.push(`${i.toString().padStart(2, '0')}:00`)
 }
 
+function isValidFecha(str) {
+  if (!str || typeof str !== 'string') return false
+  const trimmed = str.trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return false
+  const d = new Date(trimmed + 'T12:00:00')
+  return !Number.isNaN(d.getTime())
+}
+
+function formatFechaSafe(fechaStr, formatStr, fallback = '') {
+  if (!isValidFecha(fechaStr)) return fallback || fechaStr || '—'
+  try {
+    return format(new Date(fechaStr + 'T12:00:00'), formatStr, { locale: es })
+  } catch {
+    return fallback || fechaStr
+  }
+}
+
 /**
  * Vista de horarios disponibles por pabellón: día, tabla HORA x Pabellón, leyenda y selección.
  * @param {Object} props
@@ -49,7 +66,7 @@ export default function CalendarioPabellonesGrid({ theme, inlineMode = false, on
       if (error) throw error
       return data || []
     },
-    enabled: !!fecha && fecha >= hoy,
+    enabled: isValidFecha(fecha) && fecha >= hoy,
   })
 
   const grid = useMemo(() => {
@@ -183,7 +200,7 @@ export default function CalendarioPabellonesGrid({ theme, inlineMode = false, on
       {primerHorario && (
         <div className={`flex flex-wrap items-center gap-3 p-3 rounded-xl border ${isDark ? 'bg-slate-800 border-slate-600' : 'bg-slate-100 border-slate-200'}`}>
           <span className={`text-sm font-medium ${isDark ? 'text-slate-200' : 'text-gray-800'}`}>
-            1º horario: {format(new Date(primerHorario.fecha + 'T12:00:00'), 'd/M/yyyy', { locale: es })} — {primerHorario.horarios[0].nombre} {primerHorario.horarios[0].horaInicio}–{primerHorario.horarios[0].horaFin}
+            1º horario: {formatFechaSafe(primerHorario.fecha, 'd/M/yyyy')} — {primerHorario.horarios[0].nombre} {primerHorario.horarios[0].horaInicio}–{primerHorario.horarios[0].horaFin}
           </span>
           <button
             type="button"
@@ -277,7 +294,7 @@ export default function CalendarioPabellonesGrid({ theme, inlineMode = false, on
       {selectedSlots.length > 0 && (
         <div className={`flex flex-wrap items-center gap-3 p-4 rounded-xl border ${isDark ? 'bg-slate-800 border-slate-600' : 'bg-slate-100 border-slate-200'}`}>
           <span className={`font-medium ${isDark ? 'text-slate-200' : 'text-gray-800'}`}>
-            {primerHorario ? `2º horario: ${horariosAgrupados[0]?.nombre} ${horariosAgrupados[0]?.horaInicio}–${horariosAgrupados[0]?.horaFin} (${format(new Date(fecha + 'T12:00:00'), 'd/M/yyyy', { locale: es })})` : horariosAgrupados.length >= 2 ? `2 horarios: ${horariosAgrupados[0].nombre} ${horariosAgrupados[0].horaInicio}–${horariosAgrupados[0].horaFin} y ${horariosAgrupados[1].nombre} ${horariosAgrupados[1].horaInicio}–${horariosAgrupados[1].horaFin}` : '1 horario seleccionado'}
+            {primerHorario ? `2º horario: ${horariosAgrupados[0]?.nombre} ${horariosAgrupados[0]?.horaInicio}–${horariosAgrupados[0]?.horaFin} (${formatFechaSafe(fecha, 'd/M/yyyy')})` : horariosAgrupados.length >= 2 ? `2 horarios: ${horariosAgrupados[0].nombre} ${horariosAgrupados[0].horaInicio}–${horariosAgrupados[0].horaFin} y ${horariosAgrupados[1].nombre} ${horariosAgrupados[1].horaInicio}–${horariosAgrupados[1].horaFin}` : '1 horario seleccionado'}
           </span>
           <button type="button" onClick={handleConfirm} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold">
             {inlineMode ? (primerHorario || horariosAgrupados.length >= 2 ? 'Usar estos 2 horarios' : 'Usar este horario') : (primerHorario || horariosAgrupados.length >= 2 ? 'Crear solicitud con estos 2 horarios' : 'Crear solicitud con este horario')}
@@ -302,7 +319,7 @@ export default function CalendarioPabellonesGrid({ theme, inlineMode = false, on
       )}
 
       <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
-        {format(new Date(fecha + 'T12:00:00'), "EEEE d 'de' MMMM", { locale: es })}. Seleccione día y hora(s) en la tabla.
+        {isValidFecha(fecha) ? `${formatFechaSafe(fecha, "EEEE d 'de' MMMM")}. Seleccione día y hora(s) en la tabla.` : 'Seleccione día y hora(s) en la tabla.'}
       </p>
     </div>
   )
