@@ -30,7 +30,7 @@ export default function CrearPaciente() {
     hora_fin_recomendada_2: '',
     fecha_preferida_2: '',
     operating_room_id_preferido_2: '',
-    dejar_fecha_a_pabellon: false,
+    dejar_fecha_a_pabellon: true,
     horarios_extra: [], // [{ fecha_preferida, operating_room_id, hora_recomendada, hora_fin_recomendada }]
     observaciones: '',
     insumos: [], // Array de { supply_id, cantidad }
@@ -43,7 +43,7 @@ export default function CrearPaciente() {
   const [cantidadInsumo, setCantidadInsumo] = useState(1)
   const [rutError, setRutError] = useState('')
   const [showConfirmSinInsumos, setShowConfirmSinInsumos] = useState(false)
-  const [showCalendarioGrid, setShowCalendarioGrid] = useState(false)
+  const [showCalendarioGrid, setShowCalendarioGrid] = useState(true)
 
   const queryClient = useQueryClient()
   const { showError, showSuccess } = useNotifications()
@@ -136,21 +136,25 @@ export default function CrearPaciente() {
     queryKey: ['operation-pack', formData.codigo_operacion],
     queryFn: async () => {
       if (!formData.codigo_operacion) return { packItems: [], recommendedSupplyIds: [] }
-      const { data: rows, error } = await supabase
-        .from('operation_supply_packs')
-        .select('supply_id, cantidad, supplies(id, nombre, codigo)')
-        .eq('codigo_operacion', formData.codigo_operacion)
-      if (error) throw error
-      const packItems = (rows || [])
-        .filter(r => r.supplies)
-        .map(r => ({
-          supply_id: r.supply_id,
-          nombre: r.supplies.nombre,
-          codigo: r.supplies.codigo,
-          cantidad: Math.max(0, Number(r.cantidad) || 0),
-        }))
-      const recommendedSupplyIds = packItems.map(p => p.supply_id)
-      return { packItems, recommendedSupplyIds }
+      try {
+        const { data: rows, error } = await supabase
+          .from('operation_supply_packs')
+          .select('supply_id, cantidad, supplies(id, nombre, codigo)')
+          .eq('codigo_operacion', formData.codigo_operacion)
+        if (error) return { packItems: [], recommendedSupplyIds: [] }
+        const packItems = (rows || [])
+          .filter(r => r.supplies)
+          .map(r => ({
+            supply_id: r.supply_id,
+            nombre: r.supplies.nombre,
+            codigo: r.supplies.codigo,
+            cantidad: Math.max(0, Number(r.cantidad) || 0),
+          }))
+        const recommendedSupplyIds = packItems.map(p => p.supply_id)
+        return { packItems, recommendedSupplyIds }
+      } catch {
+        return { packItems: [], recommendedSupplyIds: [] }
+      }
     },
     enabled: !!formData.codigo_operacion,
   })
@@ -597,127 +601,135 @@ export default function CrearPaciente() {
               />
             </div>
 
-            {/* Botón para ver calendario y disponibilidad de pabellones (se muestra aquí mismo) */}
-            <div className="mt-3">
-              <button
-                type="button"
-                onClick={() => setShowCalendarioGrid(prev => !prev)}
-                className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
-                  theme === 'dark'
-                    ? 'bg-slate-700 text-slate-100 hover:bg-slate-600 border border-slate-600'
-                    : 'bg-white border border-slate-300 text-gray-700 hover:bg-slate-100'
-                }`}
-                title="Ver en qué pabellón y qué día hay disponibilidad"
+            {/* Desplegable: Seleccionar hora → Doctor (calendario) o Pabellón (notificación) */}
+            <div className="mt-4">
+              <label className={`block text-sm font-semibold mb-2 ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>
+                Seleccionar hora
+              </label>
+              <select
+                value={formData.dejar_fecha_a_pabellon ? 'pabellon' : 'doctor'}
+                onChange={(e) => {
+                  const esPabellon = e.target.value === 'pabellon'
+                  setFormData(prev => ({
+                    ...prev,
+                    dejar_fecha_a_pabellon: esPabellon,
+                    ...(esPabellon ? {
+                      fecha_preferida: '',
+                      hora_recomendada: '',
+                      hora_fin_recomendada: '',
+                      operating_room_id_preferido: '',
+                      fecha_preferida_2: '',
+                      hora_recomendada_2: '',
+                      hora_fin_recomendada_2: '',
+                      operating_room_id_preferido_2: '',
+                      horarios_extra: [],
+                    } : {}),
+                  }))
+                  setShowCalendarioGrid(!esPabellon)
+                }}
+                className={`input-field max-w-md ${theme === 'dark' ? 'bg-slate-800 border-slate-600' : ''}`}
               >
-                <Calendar className="w-5 h-5" />
-                <span>{showCalendarioGrid ? 'Ocultar calendario' : 'Ver calendario y disponibilidad de pabellones'}</span>
-                <LayoutGrid className="w-4 h-4 opacity-70" />
-              </button>
-              <p className={`text-xs mt-1.5 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>
-                {formData.fecha_preferida
-                  ? 'Ve en qué pabellón está libre cada slot. Puede cambiar de día y volver a elegir.'
-                  : 'Elija el día y la hora desde el calendario; luego se mostrará aquí el horario seleccionado.'}
-              </p>
+                <option value="doctor">Seleccionar hora</option>
+                <option value="pabellon">Pabellón toma la hora</option>
+              </select>
             </div>
 
-            {/* Vista de horarios por pabellón (inline): día + tabla + selección */}
-            {showCalendarioGrid && (
-              <div className={`mt-4 p-4 rounded-xl border ${theme === 'dark' ? 'bg-slate-800/30 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
-                <CalendarioPabellonesGrid
-                  theme={theme}
-                  inlineMode
-                  onCerrar={() => setShowCalendarioGrid(false)}
-                  onConfirm={(payload) => {
-                    if (!payload.slot1) {
-                      setShowCalendarioGrid(false)
-                      return
-                    }
-                    const yaTienePrimerHorario = formData.fecha_preferida && formData.hora_recomendada
-                    const eligioSoloUnSlot = !payload.slot2
-                    if (yaTienePrimerHorario && eligioSoloUnSlot) {
-                      setFormData(prev => ({
-                        ...prev,
-                        fecha_preferida_2: payload.fechaPreferida || '',
-                        hora_recomendada_2: payload.slot1.horaInicio || '',
-                        hora_fin_recomendada_2: payload.slot1.horaFin || '',
-                        operating_room_id_preferido_2: payload.slot1.operating_room_id || '',
-                      }))
-                      setSlot2Seleccionado({
-                        operating_room_id: payload.slot1.operating_room_id,
-                        nombre_pabellon: payload.slot1.nombrePabellon || '',
-                        hora_inicio: payload.slot1.horaInicio,
-                        hora_fin: payload.slot1.horaFin,
-                      })
-                      setShowSegundoHorario(true)
-                    } else {
-                      setFormData(prev => ({
-                        ...prev,
-                        fecha_preferida: payload.fechaPreferida || '',
-                        hora_recomendada: payload.slot1.horaInicio || '',
-                        hora_fin_recomendada: payload.slot1.horaFin || '',
-                        operating_room_id_preferido: payload.slot1.operating_room_id || '',
-                        fecha_preferida_2: payload.slot2 ? (payload.fechaPreferida2 || payload.fechaPreferida) : '',
-                        hora_recomendada_2: payload.slot2?.horaInicio || '',
-                        hora_fin_recomendada_2: payload.slot2?.horaFin || '',
-                        operating_room_id_preferido_2: payload.slot2?.operating_room_id || '',
-                      }))
-                      setSlot1Seleccionado({
-                        operating_room_id: payload.slot1.operating_room_id,
-                        nombre_pabellon: payload.slot1.nombrePabellon || '',
-                        hora_inicio: payload.slot1.horaInicio,
-                        hora_fin: payload.slot1.horaFin,
-                      })
-                      setSlot2Seleccionado(payload.slot2 ? {
-                        operating_room_id: payload.slot2.operating_room_id,
-                        nombre_pabellon: payload.slot2.nombrePabellon || '',
-                        hora_inicio: payload.slot2.horaInicio,
-                        hora_fin: payload.slot2.horaFin,
-                      } : null)
-                      if (payload.slot2) setShowSegundoHorario(true)
-                    }
-                    setShowCalendarioGrid(false)
-                  }}
-                />
-              </div>
-            )}
-
-            {/* Opción: dejar fecha a pabellón o elegir horarios */}
-            <div className="mt-3 flex flex-wrap gap-2">
-              {formData.dejar_fecha_a_pabellon ? (
-                <div className={`flex flex-wrap items-center gap-2 p-3 rounded-xl border ${theme === 'dark' ? 'bg-slate-800/50 border-slate-600' : 'bg-slate-100 border-slate-200'}`}>
-                  <span className={`text-sm ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>
-                    La fecha y hora serán asignadas por pabellón.
-                  </span>
+            {/* Opción: El doctor toma la hora → botón calendario + grid con día actual y pabellones (libre/ocupado/bloqueado) */}
+            {!formData.dejar_fecha_a_pabellon && (
+              <>
+                <div className="mt-3">
                   <button
                     type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, dejar_fecha_a_pabellon: false }))}
-                    className={`text-sm font-medium underline ${theme === 'dark' ? 'text-slate-400 hover:text-slate-200' : 'text-gray-600 hover:text-gray-800'}`}
+                    onClick={() => setShowCalendarioGrid(prev => !prev)}
+                    className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+                      theme === 'dark'
+                        ? 'bg-slate-700 text-slate-100 hover:bg-slate-600 border border-slate-600'
+                        : 'bg-white border border-slate-300 text-gray-700 hover:bg-slate-100'
+                    }`}
+                    title="Ver día actual y disponibilidad por pabellón (libre, ocupado, bloqueado)"
                   >
-                    Elegir yo los horarios
+                    <Calendar className="w-5 h-5" />
+                    <span>{showCalendarioGrid ? 'Ocultar calendario' : 'Ver calendario y disponibilidad de pabellones'}</span>
+                    <LayoutGrid className="w-4 h-4 opacity-70" />
                   </button>
+                  <p className={`text-xs mt-1.5 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>
+                    {formData.fecha_preferida
+                      ? 'Ve en qué pabellón está libre cada slot. Puede cambiar de día y volver a elegir.'
+                      : 'Se muestra el día actual con todos los pabellones (libre, ocupado, bloqueado). Elija día y hora desde el calendario.'}
+                  </p>
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setFormData(prev => ({
-                    ...prev,
-                    dejar_fecha_a_pabellon: true,
-                    fecha_preferida: '',
-                    hora_recomendada: '',
-                    hora_fin_recomendada: '',
-                    operating_room_id_preferido: '',
-                    fecha_preferida_2: '',
-                    hora_recomendada_2: '',
-                    hora_fin_recomendada_2: '',
-                    operating_room_id_preferido_2: '',
-                    horarios_extra: [],
-                  }))}
-                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border ${theme === 'dark' ? 'bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700' : 'bg-white border-slate-300 text-gray-700 hover:bg-slate-100'}`}
-                >
-                  Dejar fecha a pabellón (que ellos la elijan)
-                </button>
-              )}
-            </div>
+
+                {showCalendarioGrid && (
+                  <div className={`mt-4 p-4 rounded-xl border ${theme === 'dark' ? 'bg-slate-800/30 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
+                    <CalendarioPabellonesGrid
+                      theme={theme}
+                      inlineMode
+                      initialFecha={location.state?.fecha || new Date().toISOString().split('T')[0]}
+                      onCerrar={() => setShowCalendarioGrid(false)}
+                      onConfirm={(payload) => {
+                        if (!payload.slot1) {
+                          setShowCalendarioGrid(false)
+                          return
+                        }
+                        const yaTienePrimerHorario = formData.fecha_preferida && formData.hora_recomendada
+                        const eligioSoloUnSlot = !payload.slot2
+                        if (yaTienePrimerHorario && eligioSoloUnSlot) {
+                          setFormData(prev => ({
+                            ...prev,
+                            fecha_preferida_2: payload.fechaPreferida || '',
+                            hora_recomendada_2: payload.slot1.horaInicio || '',
+                            hora_fin_recomendada_2: payload.slot1.horaFin || '',
+                            operating_room_id_preferido_2: payload.slot1.operating_room_id || '',
+                          }))
+                          setSlot2Seleccionado({
+                            operating_room_id: payload.slot1.operating_room_id,
+                            nombre_pabellon: payload.slot1.nombrePabellon || '',
+                            hora_inicio: payload.slot1.horaInicio,
+                            hora_fin: payload.slot1.horaFin,
+                          })
+                          setShowSegundoHorario(true)
+                        } else {
+                          setFormData(prev => ({
+                            ...prev,
+                            fecha_preferida: payload.fechaPreferida || '',
+                            hora_recomendada: payload.slot1.horaInicio || '',
+                            hora_fin_recomendada: payload.slot1.horaFin || '',
+                            operating_room_id_preferido: payload.slot1.operating_room_id || '',
+                            fecha_preferida_2: payload.slot2 ? (payload.fechaPreferida2 || payload.fechaPreferida) : '',
+                            hora_recomendada_2: payload.slot2?.horaInicio || '',
+                            hora_fin_recomendada_2: payload.slot2?.horaFin || '',
+                            operating_room_id_preferido_2: payload.slot2?.operating_room_id || '',
+                          }))
+                          setSlot1Seleccionado({
+                            operating_room_id: payload.slot1.operating_room_id,
+                            nombre_pabellon: payload.slot1.nombrePabellon || '',
+                            hora_inicio: payload.slot1.horaInicio,
+                            hora_fin: payload.slot1.horaFin,
+                          })
+                          setSlot2Seleccionado(payload.slot2 ? {
+                            operating_room_id: payload.slot2.operating_room_id,
+                            nombre_pabellon: payload.slot2.nombrePabellon || '',
+                            hora_inicio: payload.slot2.horaInicio,
+                            hora_fin: payload.slot2.horaFin,
+                          } : null)
+                          if (payload.slot2) setShowSegundoHorario(true)
+                        }
+                        setShowCalendarioGrid(false)
+                      }}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Opción: Pabellón toma la hora → mensaje y enlace para volver a elegir el doctor */}
+            {formData.dejar_fecha_a_pabellon && (
+              <div className={`mt-3 flex flex-wrap items-center gap-2 p-4 rounded-xl border ${theme === 'dark' ? 'bg-slate-800/50 border-slate-600' : 'bg-slate-100 border-slate-200'}`}>
+                <p className={`text-sm ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>
+                  La fecha y hora serán asignadas por pabellón. Al enviar la solicitud se notificará a pabellón para que la persona a cargo elija una hora apropiada.
+                </p>
+              </div>
+            )}
 
             {/* Horarios preferidos: solo se muestra cuando ya eligió desde el calendario. Fijados: no se pueden cambiar hasta eliminar. */}
             {!formData.dejar_fecha_a_pabellon && formData.fecha_preferida && (

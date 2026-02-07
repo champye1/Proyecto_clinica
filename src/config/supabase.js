@@ -22,18 +22,23 @@ export const ROLES = {
   DOCTOR: 'doctor',
 }
 
-// Helper para obtener el rol del usuario actual
+// Helper para obtener el rol del usuario actual (usa maybeSingle para no fallar si no hay fila)
 export const getCurrentUserRole = async () => {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-  
-  const { data } = await supabase
-    .from('users')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-  
-  return data?.role || null
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+
+    const { data, error } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (error) return null
+    return data?.role || null
+  } catch {
+    return null
+  }
 }
 
 // Helper para verificar si el usuario es Pabellón

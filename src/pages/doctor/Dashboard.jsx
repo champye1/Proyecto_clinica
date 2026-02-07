@@ -7,7 +7,7 @@ import { useTheme } from '../../contexts/ThemeContext'
 
 export default function Dashboard() {
   const { theme } = useTheme()
-  const { data: doctor } = useQuery({
+  const { data: doctor, isLoading: loadingDoctor, isError: errorDoctor } = useQuery({
     queryKey: ['doctor-actual'],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -17,7 +17,7 @@ export default function Dashboard() {
         .from('doctors')
         .select('*')
         .eq('user_id', user.id)
-        .single()
+        .maybeSingle()
       
       if (error) throw error
       return data
@@ -142,8 +142,17 @@ export default function Dashboard() {
     enabled: !!doctor,
   })
 
-  if (!doctor) {
+  if (loadingDoctor) {
     return <div className="text-center py-8">Cargando...</div>
+  }
+  if (errorDoctor || !doctor) {
+    return (
+      <div className="text-center py-8">
+        <p className={theme === 'dark' ? 'text-slate-300' : 'text-gray-600'}>
+          {errorDoctor ? 'Error al cargar el perfil.' : 'No se encontró perfil de doctor. Contacte al administrador.'}
+        </p>
+      </div>
+    )
   }
 
   return (
