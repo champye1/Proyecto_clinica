@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabase'
-import { Mail, Lock, AlertCircle, Stethoscope, ArrowLeft, Building2 } from 'lucide-react'
+import { Mail, Lock, AlertCircle, Stethoscope, ArrowLeft, Building2, Eye, EyeOff } from 'lucide-react'
 import { sanitizeEmail, sanitizePassword } from '../../utils/sanitizeInput'
 import { 
   isLocked, 
@@ -18,6 +18,7 @@ export default function LoginDoctor() {
   /** 'blocked_account' = aviso por vacaciones o acceso web deshabilitado (mensaje claro para el doctor) */
   const [errorType, setErrorType] = useState(null)
   const [lockoutInfo, setLockoutInfo] = useState(null)
+  const [showPassword, setShowPassword] = useState(false)
   const navigate = useNavigate()
 
   // Verificar bloqueo al cambiar el email
@@ -59,18 +60,13 @@ export default function LoginDoctor() {
       const isEmail = email.includes('@')
       let emailToUse = email.toLowerCase().trim()
 
-      // Si no es un email, buscar el username en la base de datos para obtener el email
+      // Si no es un email, resolver username -> email vía RPC (anon no puede leer users por RLS)
       if (!isEmail) {
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('email, role')
-          .eq('username', email.toLowerCase().trim())
-          .eq('role', 'doctor')
-          .maybeSingle()
+        const { data: resolvedEmail, error: rpcError } = await supabase
+          .rpc('get_doctor_email_by_username', { p_username: email.toLowerCase().trim() })
 
-        if (userError || !userData) {
+        if (rpcError || resolvedEmail == null || resolvedEmail === '') {
           sessionStorage.removeItem('validating_login')
-          // Registrar intento fallido usando el identificador ingresado
           const attemptResult = recordFailedAttempt(email)
           if (attemptResult.isLocked) {
             throw new Error(`Demasiados intentos fallidos. Tu cuenta ha sido bloqueada por ${formatRemainingTime(Math.ceil((attemptResult.lockoutTime - Date.now()) / 1000))}.`)
@@ -80,7 +76,7 @@ export default function LoginDoctor() {
           }
         }
 
-        emailToUse = userData.email
+        emailToUse = resolvedEmail
       }
 
       const { data, error: authError } = await supabase.auth.signInWithPassword({
@@ -268,14 +264,23 @@ export default function LoginDoctor() {
               <Lock className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4 sm:w-[18px] sm:h-[18px]" />
               <input
                 id="password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(sanitizePassword(e.target.value))}
-                className="w-full bg-slate-50 border-2 border-slate-50 rounded-xl sm:rounded-2xl py-3 sm:py-4 pl-10 sm:pl-12 pr-3 sm:pr-4 focus:border-green-500 focus:bg-white transition-all outline-none font-bold text-sm sm:text-base text-slate-700 touch-manipulation"
+                className="w-full bg-slate-50 border-2 border-slate-50 rounded-xl sm:rounded-2xl py-3 sm:py-4 pl-10 sm:pl-12 pr-11 sm:pr-12 focus:border-green-500 focus:bg-white transition-all outline-none font-bold text-sm sm:text-base text-slate-700 touch-manipulation"
                 placeholder="••••••••"
                 required
                 disabled={loading}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 transition-colors"
+                title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
             </div>
           </div>
 
@@ -286,6 +291,16 @@ export default function LoginDoctor() {
           >
             {loading ? 'Iniciando sesión...' : lockoutInfo?.isLocked ? 'Cuenta Bloqueada' : 'Entrar al Sistema'}
           </button>
+
+          <p className="text-center mt-3">
+            <button
+              type="button"
+              onClick={() => navigate('/recuperar-contrasena')}
+              className="text-slate-500 hover:text-green-600 text-[10px] sm:text-xs font-bold transition-colors"
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
+          </p>
         </form>
       </div>
     </div>

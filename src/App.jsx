@@ -5,6 +5,8 @@ import { logger } from './utils/logger'
 import Inicio from './pages/auth/Inicio'
 import LoginPabellon from './pages/auth/LoginPabellon'
 import LoginDoctor from './pages/auth/LoginDoctor'
+import RecuperarContraseña from './pages/auth/RecuperarContraseña'
+import RestablecerContraseña from './pages/auth/RestablecerContraseña'
 import PabellonLayout from './layouts/PabellonLayout'
 import DoctorLayout from './layouts/DoctorLayout'
 import LoadingSpinner from './components/common/LoadingSpinner'
@@ -181,6 +183,9 @@ function AppContent() {
           )
         } 
       />
+
+      <Route path="/recuperar-contrasena" element={<RecuperarContraseña />} />
+      <Route path="/restablecer-contrasena" element={<RestablecerContraseña />} />
       
       <Route 
         path="/pabellon/*" 

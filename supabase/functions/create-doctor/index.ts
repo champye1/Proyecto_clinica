@@ -166,8 +166,18 @@ serve(async (req) => {
       }
     }
 
-    // Usar la contraseña proporcionada o generar una aleatoria
-    const tempPassword = password || (Math.random().toString(36).slice(-12) + 'A1!')
+    // Usar la contraseña proporcionada (solo si es no vacía) o generar una aleatoria
+    const rawPassword = password != null ? String(password).trim() : ''
+    const tempPassword = rawPassword.length > 0
+      ? rawPassword
+      : (() => {
+          const letras = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+          const numeros = '0123456789'
+          let p = letras[Math.floor(Math.random() * letras.length)] + numeros[Math.floor(Math.random() * numeros.length)]
+          const todos = letras + numeros
+          for (let i = 2; i < 6; i++) p += todos[Math.floor(Math.random() * todos.length)]
+          return p.split('').sort(() => Math.random() - 0.5).join('')
+        })()
     
     // Usar el email proporcionado (el username se usa solo para referencia, el email es el login)
     const userEmail = email.toLowerCase().trim()
@@ -234,13 +244,14 @@ serve(async (req) => {
       userId = authData.user.id
     }
 
-    // Crear registro en public.users si no existe (obligatorio para que doctors.user_id cumpla la FK)
+    // Crear registro en public.users (incluir username para que el doctor pueda iniciar sesión con usuario o email)
     const { data: insertedUser, error: insertUserError } = await supabaseAdmin
       .from('users')
       .insert({
         id: userId,
         email: userEmail,
         role: 'doctor',
+        ...(username ? { username: username.toLowerCase().trim() } : {}),
       })
       .select('id')
       .single()

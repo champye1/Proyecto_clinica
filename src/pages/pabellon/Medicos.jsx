@@ -47,10 +47,7 @@ export default function Medicos() {
   const [filtroEspecialidad, setFiltroEspecialidad] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('')
   const [showConfirmEliminar, setShowConfirmEliminar] = useState(false)
-  const [showConfirmEstado, setShowConfirmEstado] = useState(false)
   const [medicoAEliminar, setMedicoAEliminar] = useState(null)
-  const [medicoACambiarEstado, setMedicoACambiarEstado] = useState(null)
-  const [nuevoEstado, setNuevoEstado] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [touchedFields, setTouchedFields] = useState({})
   const [currentPage, setCurrentPage] = useState(1)
@@ -188,9 +185,9 @@ export default function Medicos() {
     }
     
     if (name === 'password' && formData.acceso_web_enabled && value) {
-      const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/
+      const passwordRegex = /^(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9@$!%*?&]{6}$/
       if (!passwordRegex.test(value)) {
-        errors.password = 'La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula, un número y un carácter especial'
+        errors.password = 'La contraseña debe tener exactamente 6 caracteres, al menos una letra y un número (puede incluir @)'
       } else {
         delete errors.password
       }
@@ -436,23 +433,6 @@ export default function Medicos() {
     setMedicoAEliminar(null)
   }
 
-  const handleCambiarEstado = (medico, nuevoEstado) => {
-    setMedicoACambiarEstado(medico)
-    setNuevoEstado(nuevoEstado)
-    setShowConfirmEstado(true)
-  }
-
-  const confirmarCambiarEstado = () => {
-    if (medicoACambiarEstado) {
-      actualizarMedico.mutate({ 
-        id: medicoACambiarEstado.id, 
-        data: { estado: nuevoEstado } 
-      })
-    }
-    setMedicoACambiarEstado(null)
-    setNuevoEstado('')
-  }
-
   const handleSubmit = (e) => {
     e.preventDefault()
     
@@ -477,10 +457,10 @@ export default function Medicos() {
         return
       }
       
-      // Validar fortaleza de contraseña
-      const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/
+      // Validar contraseña: 6 caracteres, al menos una letra y un número (puede incluir @)
+      const passwordRegex = /^(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9@$!%*?&]{6}$/
       if (!passwordRegex.test(formData.password)) {
-        showError('La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula, un número y un carácter especial')
+        showError('La contraseña debe tener exactamente 6 caracteres, al menos una letra y un número (puede incluir @)')
         return
       }
     }
@@ -512,14 +492,20 @@ export default function Medicos() {
     return primeraLetraNombre + apellidoCompleto
   }
 
-  // Generar contraseña aleatoria
+  // Generar contraseña aleatoria: 6 caracteres, solo letras y números
   const generarPassword = () => {
-    const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&*'
+    const letras = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+    const numeros = '0123456789'
     let password = ''
-    for (let i = 0; i < 12; i++) {
-      password += caracteres.charAt(Math.floor(Math.random() * caracteres.length))
+    // Asegurar al menos una letra y un número
+    password += letras.charAt(Math.floor(Math.random() * letras.length))
+    password += numeros.charAt(Math.floor(Math.random() * numeros.length))
+    const todos = letras + numeros
+    for (let i = 2; i < 6; i++) {
+      password += todos.charAt(Math.floor(Math.random() * todos.length))
     }
-    return password
+    // Mezclar para que no siempre sea letra+numero al inicio
+    return password.split('').sort(() => Math.random() - 0.5).join('')
   }
 
   // Actualizar username cuando cambia el nombre o apellido (solo si acceso web está habilitado)
@@ -541,7 +527,7 @@ export default function Medicos() {
       nombre: medico.nombre,
       apellido: medico.apellido,
       rut: rutFormateado,
-      email: medico.email,
+      email: (medico.email || '').toLowerCase(),
       especialidad: medico.especialidad,
       estado: medico.estado,
       acceso_web_enabled: medico.acceso_web_enabled,
@@ -929,7 +915,7 @@ export default function Medicos() {
                       {medico.nombre} {medico.apellido}
                     </td>
                     <td className={`py-3 px-4 ${theme === 'dark' ? 'text-slate-100' : 'text-gray-700'}`}>{formatRut(medico.rut)}</td>
-                    <td className={`py-3 px-4 ${theme === 'dark' ? 'text-slate-100' : 'text-gray-700'}`}>{medico.email}</td>
+                    <td className={`py-3 px-4 ${theme === 'dark' ? 'text-slate-100' : 'text-gray-700'}`}>{(medico.email || '').toLowerCase()}</td>
                     <td className={`py-3 px-4 ${theme === 'dark' ? 'text-slate-100' : 'text-gray-700'}`}>
                       {medico.especialidad.replace(/_/g, ' ')}
                     </td>
@@ -977,25 +963,6 @@ export default function Medicos() {
                             <XCircle className="w-5 h-5" />
                           ) : (
                             <CheckCircle2 className="w-5 h-5" />
-                          )}
-                        </button>
-                        <button
-                          onClick={() => {
-                            const nuevoEstado = medico.estado === 'activo' ? 'vacaciones' : 'activo'
-                            handleCambiarEstado(medico, nuevoEstado)
-                          }}
-                          className={`p-2 rounded transition-colors ${
-                            theme === 'dark' 
-                              ? 'text-purple-400 hover:bg-purple-900/30 hover:text-purple-300' 
-                              : 'text-purple-600 hover:bg-purple-50'
-                          }`}
-                          title={`Cambiar estado a ${medico.estado === 'activo' ? 'vacaciones' : 'activo'}`}
-                          disabled={actualizarMedico.isPending}
-                        >
-                          {actualizarMedico.isPending ? (
-                            <LoadingSpinner size="sm" />
-                          ) : (
-                            <Edit className="w-5 h-5" />
                           )}
                         </button>
                         <button
@@ -1047,21 +1014,6 @@ export default function Medicos() {
         confirmText="Eliminar"
         cancelText="Cancelar"
         variant="danger"
-      />
-
-      <ConfirmModal
-        isOpen={showConfirmEstado}
-        onClose={() => {
-          setShowConfirmEstado(false)
-          setMedicoACambiarEstado(null)
-          setNuevoEstado('')
-        }}
-        onConfirm={confirmarCambiarEstado}
-        title="Cambiar Estado del Médico"
-        message={medicoACambiarEstado ? `¿Estás seguro de cambiar el estado del médico ${medicoACambiarEstado.nombre} ${medicoACambiarEstado.apellido} a "${nuevoEstado === 'activo' ? 'Activo' : 'Vacaciones'}"?\n\nEsto puede afectar las solicitudes pendientes.` : ''}
-        confirmText="Cambiar Estado"
-        cancelText="Cancelar"
-        variant="warning"
       />
     </div>
   )
