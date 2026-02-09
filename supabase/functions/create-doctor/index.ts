@@ -304,6 +304,14 @@ serve(async (req) => {
       )
     }
 
+    // Asegurar siempre el username en users (creación nueva ya lo tiene; si reutilizamos usuario existente, el INSERT falló y hay que actualizarlo)
+    if (username && username.trim()) {
+      await supabaseAdmin
+        .from('users')
+        .update({ username: username.toLowerCase().trim() })
+        .eq('id', userId)
+    }
+
     // Crear registro en doctors
     const { data: doctorData, error: insertDoctorError } = await supabaseAdmin
       .from('doctors')
