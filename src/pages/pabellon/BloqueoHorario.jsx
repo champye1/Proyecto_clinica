@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../config/supabase'
 import { Calendar, Clock, Users, X, Edit, CheckCircle, XCircle, Lock } from 'lucide-react'
 import { useNotifications } from '../../hooks/useNotifications'
-import { sanitizeString } from '../../utils/sanitizeInput'
+import { sanitizeString, sanitizeNumber } from '../../utils/sanitizeInput'
 import { HORAS_SELECT } from '../../utils/horasOpciones'
 
 const HORAS_PARA_PREVIEW = HORAS_SELECT
@@ -533,7 +533,7 @@ export default function BloqueoHorario() {
                 min={1}
                 max={365}
                 value={formData.dias_limite_vigencia}
-                onChange={(e) => setFormData({ ...formData, dias_limite_vigencia: e.target.value.replace(/\D/g, '').slice(0, 3) })}
+                onChange={(e) => setFormData({ ...formData, dias_limite_vigencia: sanitizeNumber(e.target.value).slice(0, 3) })}
                 className="input-field"
                 placeholder="Ej: 5"
               />

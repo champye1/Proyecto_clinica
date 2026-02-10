@@ -29,6 +29,7 @@ export default function Solicitudes() {
   const debouncedBusqueda = useDebounce(busqueda, 300)
   const [solicitudProgramando, setSolicitudProgramando] = useState(null)
   const [solicitudDetalle, setSolicitudDetalle] = useState(null)
+  const [solicitudAceptandoHorario, setSolicitudAceptandoHorario] = useState(null)
   
   // Verificar si hay un slot seleccionado desde el calendario
   useEffect(() => {
@@ -73,7 +74,7 @@ export default function Solicitudes() {
         .from('surgery_requests')
         .select(`
           *,
-          doctors:doctor_id(id, nombre, apellido, especialidad, estado),
+          doctors:doctor_id(id, user_id, nombre, apellido, especialidad, estado),
           patients:patient_id(nombre, apellido, rut),
           surgery_request_supplies(
             cantidad,
@@ -397,6 +398,222 @@ export default function Solicitudes() {
     },
   })
 
+  // Programar directamente usando el horario preferido definido por el médico
+  const programarConHorarioDelMedico = useMutation({
+    mutationFn: async ({ solicitudId, fecha, operatingRoomId, horaInicio, horaFin }) => {
+      // Normalizar horas a formato HH:MM:SS
+      const normalizarHora = (hora) => {
+        if (!hora) return null
+        if (typeof hora === 'string') {
+          const limpia = hora.length === 5 ? `${hora}:00` : hora
+          return limpia
+        }
+        return hora
+      }
+
+      const horaInicioNorm = normalizarHora(horaInicio)
+      let horaFinNorm = normalizarHora(horaFin)
+
+      // Si no viene hora fin desde la solicitud, asumir 1 hora de duración
+      if (!horaFinNorm && horaInicioNorm) {
+        const [h, m, s] = horaInicioNorm.split(':').map(Number)
+        const base = new Date()
+        base.setHours(h, m ?? 0, s ?? 0, 0)
+        base.setHours(base.getHours() + 1)
+        const hh = String(base.getHours()).padStart(2, '0')
+        const mm = String(base.getMinutes()).padStart(2, '0')
+        horaFinNorm = `${hh}:${mm}:00`
+      }
+
+      const { data, error } = await supabase.rpc('programar_cirugia_completa', {
+        p_surgery_request_id: solicitudId,
+        p_operating_room_id: operatingRoomId,
+        p_fecha: fecha,
+        p_hora_inicio: horaInicioNorm,
+        p_hora_fin: horaFinNorm,
+        p_observaciones: null,
+      })
+
+      if (error) {
+        logger.errorWithContext('Error al programar cirugía con horario del médico', error)
+        throw error
+      }
+
+      if (!data || !data.success) {
+        throw new Error(data?.message || 'Error desconocido al programar la cirugía con el horario del médico')
+      }
+
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['solicitudes'])
+      queryClient.invalidateQueries(['solicitudes-pendientes'])
+      queryClient.invalidateQueries(['cirugias-hoy'])
+      queryClient.invalidateQueries(['cirugias-calendario'])
+      setSolicitudAceptandoHorario(null)
+      showSuccess('Horario del médico aceptado y cirugía programada')
+    },
+    onError: (error) => {
+      logger.errorWithContext('Error al aceptar horario del médico (onError)', error)
+      let mensaje = 'Error al aceptar el horario del médico'
+
+      const errorMessage = error.message || error.toString() || 'Error desconocido'
+
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+        mensaje = 'Error de conexión. Verifique su conexión a internet e intente nuevamente.'
+      } else if (errorMessage.includes('solapamiento') || errorMessage.includes('overlap')) {
+        mensaje = 'Ya existe una cirugía programada en este horario. Por favor, seleccione otro horario.'
+      } else if (errorMessage.includes('bloqueado') || errorMessage.includes('blocked')) {
+        mensaje = 'El horario seleccionado está bloqueado por convenio'
+      } else if (errorMessage.includes('fecha pasada')) {
+        mensaje = 'No se puede agendar una cirugía en una fecha pasada'
+      } else {
+        mensaje = errorMessage
+      }
+
+      showError(mensaje)
+    },
+  })
+
+  // Reagendar una cirugía existente usando el horario propuesto por el médico
+  const reagendarConHorarioDelMedico = useMutation({
+    mutationFn: async ({ solicitudId, fecha, operatingRoomId, horaInicio, horaFin }) => {
+      const normalizarHora = (hora) => {
+        if (!hora) return null
+        if (typeof hora === 'string') {
+          return hora.length === 5 ? `${hora}:00` : hora
+        }
+        return hora
+      }
+
+      const horaInicioNorm = normalizarHora(horaInicio)
+      let horaFinNorm = normalizarHora(horaFin)
+
+      if (!horaFinNorm && horaInicioNorm) {
+        const [h, m, s] = horaInicioNorm.split(':').map(Number)
+        const base = new Date()
+        base.setHours(h, m ?? 0, s ?? 0, 0)
+        base.setHours(base.getHours() + 1)
+        horaFinNorm = `${String(base.getHours()).padStart(2, '0')}:${String(base.getMinutes()).padStart(2, '0')}:00`
+      }
+
+      const { data: cirugia, error: cirugiaError } = await supabase
+        .from('surgeries')
+        .select('id')
+        .eq('surgery_request_id', solicitudId)
+        .is('deleted_at', null)
+        .maybeSingle()
+
+      if (cirugiaError) throw cirugiaError
+      if (!cirugia?.id) throw new Error('No hay cirugía programada para esta solicitud.')
+
+      const { error: updateError } = await supabase
+        .from('surgeries')
+        .update({
+          fecha,
+          hora_inicio: horaInicioNorm,
+          hora_fin: horaFinNorm,
+          operating_room_id: operatingRoomId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', cirugia.id)
+
+      if (updateError) throw updateError
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['solicitudes'])
+      queryClient.invalidateQueries(['solicitudes-pendientes'])
+      queryClient.invalidateQueries(['cirugias-hoy'])
+      queryClient.invalidateQueries(['cirugias-calendario'])
+      queryClient.invalidateQueries(['calendario-anual-cirugias'])
+      setSolicitudAceptandoHorario(null)
+      showSuccess('Horario del médico aceptado y cirugía reagendada')
+    },
+    onError: (error) => {
+      logger.errorWithContext('Error al reagendar con horario del médico (onError)', error)
+      const msg = error.message || error.toString() || 'Error desconocido'
+      if (msg.includes('solapamiento') || msg.includes('overlap') || msg.includes('Ya existe')) {
+        showError('Ya existe una cirugía en ese horario. Elija otro horario.')
+      } else if (msg.includes('bloqueado') || msg.includes('blocked')) {
+        showError('El horario está bloqueado.')
+      } else {
+        showError('Error al aceptar el horario del médico: ' + msg)
+      }
+    },
+  })
+
+  // Buscar el primer horario preferido utilizable (1°, 2° o extra)
+  const obtenerHorarioPreferido = (solicitud) => {
+    if (!solicitud || solicitud.dejar_fecha_a_pabellon) return null
+
+    if (solicitud.fecha_preferida && solicitud.hora_recomendada && solicitud.operating_room_id_preferido) {
+      return {
+        fecha: solicitud.fecha_preferida,
+        horaInicio: solicitud.hora_recomendada,
+        horaFin: solicitud.hora_fin_recomendada || null,
+        operatingRoomId: solicitud.operating_room_id_preferido,
+      }
+    }
+
+    if (solicitud.fecha_preferida_2 && solicitud.hora_recomendada_2 && solicitud.operating_room_id_preferido_2) {
+      return {
+        fecha: solicitud.fecha_preferida_2,
+        horaInicio: solicitud.hora_recomendada_2,
+        horaFin: solicitud.hora_fin_recomendada_2 || null,
+        operatingRoomId: solicitud.operating_room_id_preferido_2,
+      }
+    }
+
+    const extras = Array.isArray(solicitud.horarios_preferidos_extra)
+      ? solicitud.horarios_preferidos_extra
+      : []
+    const extraValido = extras.find(
+      h => h?.fecha_preferida && h?.hora_recomendada && h?.operating_room_id
+    )
+    if (extraValido) {
+      return {
+        fecha: extraValido.fecha_preferida,
+        horaInicio: extraValido.hora_recomendada,
+        horaFin: extraValido.hora_fin_recomendada || null,
+        operatingRoomId: extraValido.operating_room_id,
+      }
+    }
+
+    return null
+  }
+
+  const tieneHorarioPreferido = (solicitud) => Boolean(obtenerHorarioPreferido(solicitud))
+
+  // Aceptar directamente el horario definido por el médico (sin pasar por el calendario)
+  const handleAceptarHorarioMedico = (solicitud) => {
+    const horario = obtenerHorarioPreferido(solicitud)
+    if (!horario) {
+      showError('La solicitud no tiene un horario preferido válido para aceptar.')
+      return
+    }
+
+    setSolicitudAceptandoHorario(solicitud)
+
+    if (solicitud.estado === 'aceptada') {
+      reagendarConHorarioDelMedico.mutate({
+        solicitudId: solicitud.id,
+        fecha: horario.fecha,
+        operatingRoomId: horario.operatingRoomId,
+        horaInicio: horario.horaInicio,
+        horaFin: horario.horaFin,
+      })
+      return
+    }
+
+    programarConHorarioDelMedico.mutate({
+      solicitudId: solicitud.id,
+      fecha: horario.fecha,
+      operatingRoomId: horario.operatingRoomId,
+      horaInicio: horario.horaInicio,
+      horaFin: horario.horaFin,
+    })
+  }
+
   const handleAceptarYProgramar = (solicitud) => {
     // Guardar la solicitud en sessionStorage para que el calendario la pueda recuperar
     sessionStorage.setItem('solicitud_gestionando', JSON.stringify(solicitud))
@@ -404,8 +621,37 @@ export default function Solicitudes() {
     navigate('/pabellon/calendario')
   }
 
+  // Notificar al doctor que pabellón debe reagendar antes de abrir el calendario
+  const notificarDoctorPorReagendamiento = async (solicitud) => {
+    const doctorUserId = solicitud?.doctors?.user_id
+    if (!doctorUserId) return
+
+    const nombrePaciente = `${solicitud?.patients?.nombre || ''} ${solicitud?.patients?.apellido || ''}`.trim() || 'el paciente'
+    const mensaje = `Pabellón no pudo aceptar el horario propuesto para ${nombrePaciente}. Se iniciará el proceso de reagendamiento.`
+
+    const { error } = await supabase
+      .from('notifications')
+      .insert({
+        user_id: doctorUserId,
+        tipo: 'solicitud_reagendamiento',
+        titulo: 'Pabellón reagendará la cirugía',
+        mensaje,
+        relacionado_con: solicitud.id,
+      })
+
+    if (error) throw error
+  }
+
   // Ir al calendario para reagendar (solicitud ya programada; el doctor pidió cambio de fecha/hora)
-  const handleReagendar = (solicitud) => {
+  const handleReagendar = async (solicitud) => {
+    try {
+      await notificarDoctorPorReagendamiento(solicitud)
+    } catch (error) {
+      logger.errorWithContext('Error al notificar al doctor sobre reagendamiento', error)
+      const errorMessage = error.message || error.toString() || 'Error desconocido'
+      showError('No se pudo notificar al doctor: ' + errorMessage)
+    }
+
     sessionStorage.setItem('reagendar_solicitud_id', solicitud.id)
     navigate('/pabellon/calendario', { state: { reagendar: true, surgeryRequestId: solicitud.id } })
   }
@@ -733,23 +979,66 @@ export default function Solicitudes() {
                     
                     {/* Botón Reagendar: cuando el doctor pidió reagendamiento y la solicitud ya está aceptada/programada */}
                     {solicitud.estado === 'aceptada' && solicitud.reagendamiento_notificado_at && (
-                      <button
-                        onClick={() => handleReagendar(solicitud)}
-                        className="bg-amber-500 hover:bg-amber-600 text-white px-4 sm:px-5 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-black text-[9px] sm:text-[10px] uppercase tracking-[0.15em] shadow-lg active:scale-95 transition-all touch-manipulation flex items-center gap-2"
-                        title="Cambiar fecha/hora de la cirugía"
-                      >
-                        <CalendarClock className="w-4 h-4" />
-                        REAGENDAR
-                      </button>
+                      <>
+                        {tieneHorarioPreferido(solicitud) && (
+                          <button
+                            onClick={() => handleAceptarHorarioMedico(solicitud)}
+                            disabled={programarConHorarioDelMedico.isPending || reagendarConHorarioDelMedico.isPending}
+                            className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-4 sm:px-5 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-black text-[9px] sm:text-[10px] uppercase tracking-[0.15em] shadow-lg active:scale-95 transition-all touch-manipulation flex items-center gap-2"
+                            title="Aceptar horario propuesto por el médico"
+                          >
+                            {reagendarConHorarioDelMedico.isPending && solicitudAceptandoHorario?.id === solicitud.id ? (
+                              <>
+                                <LoadingSpinner size="sm" />
+                                Aceptando horario...
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="w-4 h-4" />
+                                ACEPTAR HORARIO MÉDICO
+                              </>
+                            )}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleReagendar(solicitud)}
+                          className="bg-amber-500 hover:bg-amber-600 text-white px-4 sm:px-5 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-black text-[9px] sm:text-[10px] uppercase tracking-[0.15em] shadow-lg active:scale-95 transition-all touch-manipulation flex items-center gap-2"
+                          title="Cambiar fecha/hora de la cirugía"
+                        >
+                          <CalendarClock className="w-4 h-4" />
+                          REAGENDAR
+                        </button>
+                      </>
                     )}
-                    {/* Botón Gestionar Cupo */}
+                    {/* Botones de gestión de cupo */}
                     {solicitud.estado === 'pendiente' && (
-                      <button
-                        onClick={() => handleAceptarYProgramar(solicitud)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 lg:px-8 py-2.5 sm:py-3 lg:py-3.5 rounded-lg sm:rounded-xl font-black text-[9px] sm:text-[10px] uppercase tracking-[0.15em] shadow-lg active:scale-95 transition-all touch-manipulation flex-1 sm:flex-initial"
-                      >
-                        GESTIONAR CUPO
-                      </button>
+                      <>
+                        {tieneHorarioPreferido(solicitud) && (
+                          <button
+                            onClick={() => handleAceptarHorarioMedico(solicitud)}
+                            disabled={programarConHorarioDelMedico.isPending || reagendarConHorarioDelMedico.isPending}
+                            className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-4 sm:px-5 lg:px-6 py-2.5 sm:py-3 lg:py-3.5 rounded-lg sm:rounded-xl font-black text-[9px] sm:text-[10px] uppercase tracking-[0.15em] shadow-lg active:scale-95 transition-all touch-manipulation flex-1 sm:flex-initial flex items-center justify-center gap-2"
+                          >
+                            {programarConHorarioDelMedico.isPending && solicitudAceptandoHorario?.id === solicitud.id ? (
+                              <>
+                                <LoadingSpinner size="sm" />
+                                Aceptando horario...
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="w-4 h-4" />
+                                ACEPTAR HORARIO MÉDICO
+                              </>
+                            )}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleAceptarYProgramar(solicitud)}
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 lg:px-8 py-2.5 sm:py-3 lg:py-3.5 rounded-lg sm:rounded-xl font-black text-[9px] sm:text-[10px] uppercase tracking-[0.15em] shadow-lg active:scale-95 transition-all touch-manipulation flex-1 sm:flex-initial"
+                        >
+                          GESTIONAR CUPO
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -1041,7 +1330,7 @@ export default function Solicitudes() {
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Hora Fin *</label>
                   <select
                     value={formProgramacion.hora_fin ? String(formProgramacion.hora_fin).slice(0, 5) : ''}
-                    onChange={(e) => setFormProgramacion({ ...formProgramacion, hora_fin: e.target.value })}
+                    onChange={(e) => setFormProgramacion({ ...formProgramacion, hora_fin: sanitizeString(e.target.value) })}
                     className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl py-3.5 px-5 focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-slate-700"
                     required
                   >

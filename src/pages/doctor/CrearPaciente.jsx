@@ -833,7 +833,7 @@ export default function CrearPaciente() {
                         value={extra.fecha_preferida || ''}
                         onChange={(e) => setFormData(prev => ({
                           ...prev,
-                          horarios_extra: prev.horarios_extra.map((h, i) => i === idx ? { ...h, fecha_preferida: e.target.value } : h),
+                          horarios_extra: prev.horarios_extra.map((h, i) => i === idx ? { ...h, fecha_preferida: sanitizeString(e.target.value) } : h),
                         }))}
                         min={new Date().toISOString().split('T')[0]}
                         className="input-field mt-0 w-auto min-w-[140px]"

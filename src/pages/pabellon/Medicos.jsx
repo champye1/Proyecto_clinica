@@ -4,6 +4,7 @@ import { supabase } from '../../config/supabase'
 import { Plus, Edit, Trash2, CheckCircle2, XCircle, Globe, Key, Eye, EyeOff, Search, Download, FileSpreadsheet } from 'lucide-react'
 import { formatRut, cleanRut, validateRut } from '../../utils/rutFormatter'
 import { useNotifications } from '../../hooks/useNotifications'
+import toast from 'react-hot-toast'
 import { sanitizeString, sanitizeEmail, sanitizeCode, sanitizeRut, sanitizePassword } from '../../utils/sanitizeInput'
 import { logger } from '../../utils/logger'
 import { useDebounce } from '../../hooks/useDebounce'
@@ -57,6 +58,56 @@ export default function Medicos() {
   const { showSuccess, showError, showInfo } = useNotifications()
   const debouncedBusqueda = useDebounce(busqueda, 300)
   const { theme } = useTheme()
+
+  // Notificación personalizada para acciones de doctor
+  const notifyDoctorAction = (type, doctorName, details = null) => {
+    const isCreate = type === 'create'
+    const title = isCreate ? 'Médico Creado' : 'Perfil Actualizado'
+    const icon = isCreate ? '✅' : '🔄'
+    
+    toast.custom((t) => (
+      <div
+        className={`${
+          t.visible ? 'animate-enter' : 'animate-leave'
+        } max-w-md w-full bg-white dark:bg-slate-800 shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5`}
+      >
+        <div className="flex-1 w-0 p-4">
+          <div className="flex items-start">
+            <div className="flex-shrink-0 pt-0.5">
+              <span className="text-2xl">{icon}</span>
+            </div>
+            <div className="ml-3 flex-1">
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                {title}
+              </p>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-300">
+                Doctor: <span className="font-semibold">{doctorName}</span>
+              </p>
+              <p className="mt-1 text-xs text-gray-400">
+                {new Date().toLocaleString()}
+              </p>
+              {details && (
+                <div className="mt-2 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-slate-700 p-2 rounded whitespace-pre-wrap">
+                  {details}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex border-l border-gray-200 dark:border-slate-700">
+          <button
+            onClick={() => toast.dismiss(t.id)}
+            className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+    ), {
+      duration: 8000,
+      position: 'top-right',
+    })
+  }
 
   const { data: medicos = [], isLoading } = useQuery({
     queryKey: ['medicos'],
@@ -279,16 +330,14 @@ export default function Medicos() {
       
       // Mostrar mensaje según si se creó el usuario automáticamente o no
       if (result.tempPassword) {
-        const mensaje = `✅ Médico creado exitosamente!\n\n` +
-          `👤 Usuario creado automáticamente en Supabase Auth\n\n` +
+        const detalle = `👤 Usuario: ${result.username || result.email}\n` +
           `📧 Email: ${result.email}\n` +
-          `👤 Usuario: ${result.username || result.email}\n` +
-          `🔑 Contraseña: ${result.tempPassword}\n\n` +
-          `⚠️ IMPORTANTE: El médico debe cambiar su contraseña al primer inicio de sesión.\n\n` +
-          `El acceso web está habilitado.`
-        showInfo(mensaje)
+          `🔑 Contraseña: ${result.tempPassword}\n` +
+          `⚠️ Debe cambiar contraseña al ingresar.`
+        
+        notifyDoctorAction('create', `${result.nombre} ${result.apellido}`, detalle)
       } else {
-        showSuccess('Médico creado exitosamente. El acceso web está deshabilitado.')
+        notifyDoctorAction('create', `${result.nombre} ${result.apellido}`, 'Acceso web deshabilitado.')
       }
     },
     onError: (error) => {
@@ -307,7 +356,7 @@ export default function Medicos() {
   })
 
   const actualizarMedico = useMutation({
-    mutationFn: async ({ id, data }) => {
+    mutationFn: async ({ id, data, password }) => {
       // Validar email único si cambió
       if (data.email && medicoEditando && data.email !== medicoEditando.email) {
         const { data: medicoExistente, error: errorBusqueda } = await supabase
@@ -325,6 +374,27 @@ export default function Medicos() {
         }
       }
 
+      // 1. Actualizar contraseña si se proporcionó
+      if (password) {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) throw new Error('No hay sesión activa')
+
+        const { data: functionData, error: functionError } = await supabase.functions.invoke('update-doctor-password', {
+          body: { doctorId: id, password },
+          // No enviar Authorization header manual, supabase-js lo maneja automáticamente
+        })
+
+        if (functionError) {
+          console.error('Error invocando update-doctor-password:', functionError)
+          throw new Error(functionError.message || 'Error al actualizar contraseña')
+        }
+        
+        if (functionData && functionData.error) {
+           throw new Error(functionData.error)
+        }
+      }
+
+      // 2. Actualizar datos del perfil
       const { error } = await supabase
         .from('doctors')
         .update(data)
@@ -332,11 +402,20 @@ export default function Medicos() {
       
       if (error) throw error
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries(['medicos'])
       setMedicoEditando(null)
       setMostrarFormulario(false)
-      showSuccess('Médico actualizado exitosamente')
+      
+      const nombreDoctor = variables.data.nombre 
+        ? `${variables.data.nombre} ${variables.data.apellido}` 
+        : (medicoEditando ? `${medicoEditando.nombre} ${medicoEditando.apellido}` : 'Doctor')
+      
+      const detalle = variables.password 
+        ? 'Perfil y contraseña actualizados correctamente.' 
+        : 'Los datos han sido actualizados correctamente.'
+        
+      notifyDoctorAction('update', nombreDoctor, detalle)
     },
     onError: (error) => {
       const errorMessage = error.message || error.toString() || 'Error desconocido'
@@ -450,18 +529,21 @@ export default function Medicos() {
       return
     }
     
-    // Validar contraseña si acceso web está habilitado
-    if (formData.acceso_web_enabled && !medicoEditando) {
-      if (!formData.username || !formData.password) {
+    // Validar contraseña si acceso web está habilitado y es creación o edición
+    if (formData.acceso_web_enabled) {
+      // En creación: usuario y contraseña obligatorios
+      if (!medicoEditando && (!formData.username || !formData.password)) {
         showInfo('Si habilitas el acceso web, debes proporcionar un nombre de usuario y contraseña.')
         return
       }
-      
-      // Validar contraseña: 6 caracteres, al menos una letra y un número (puede incluir @)
-      const passwordRegex = /^(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9@$!%*?&]{6}$/
-      if (!passwordRegex.test(formData.password)) {
-        showError('La contraseña debe tener exactamente 6 caracteres, al menos una letra y un número (puede incluir @)')
-        return
+
+      // En edición o creación: si hay contraseña, validarla
+      if (formData.password) {
+        const passwordRegex = /^(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9@$!%*?&]{6}$/
+        if (!passwordRegex.test(formData.password)) {
+          showError('La contraseña debe tener exactamente 6 caracteres, al menos una letra y un número (puede incluir @)')
+          return
+        }
       }
     }
     
@@ -470,15 +552,25 @@ export default function Medicos() {
       ...formData,
       rut: rutLimpio,
       email: formData.email.toLowerCase().trim(),
-      // Solo enviar username y password si acceso_web está habilitado y no estamos editando
-      ...(formData.acceso_web_enabled && !medicoEditando ? {
-        username: formData.username.toLowerCase().trim(),
-        password: formData.password
-      } : {})
+    }
+
+    // Eliminar campos que no van a la tabla doctors
+    delete dataToSubmit.username
+    delete dataToSubmit.password
+
+    // Si es creación, re-agregar username y password si corresponde (create-doctor los espera)
+    if (!medicoEditando && formData.acceso_web_enabled) {
+      dataToSubmit.username = formData.username.toLowerCase().trim()
+      dataToSubmit.password = formData.password
     }
     
     if (medicoEditando) {
-      actualizarMedico.mutate({ id: medicoEditando.id, data: dataToSubmit })
+      // En edición, enviamos password por separado si existe
+      actualizarMedico.mutate({ 
+        id: medicoEditando.id, 
+        data: dataToSubmit,
+        password: formData.password || null
+      })
     } else {
       crearMedico.mutate(dataToSubmit)
     }

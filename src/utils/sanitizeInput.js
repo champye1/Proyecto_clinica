@@ -1,17 +1,20 @@
 /**
  * Utilidades para sanitización de inputs en formularios
- * Previene XSS, SQL Injection y otros ataques
+ * Previene XSS, SQL Injection, caracteres de control y otros ataques
  */
+
+/** Caracteres de control y null byte que no deben guardarse en texto */
+const CONTROL_CHARS_REGEX = /[\x00-\x1F\x7F]/g
 
 /**
  * Sanitiza un string removiendo caracteres peligrosos y scripts
  * @param {string} input - El string a sanitizar
  * @param {Object} options - Opciones de sanitización
- * @returns {string} - String sanitizado
+ * @returns {string} - String sanitizado (si input no es string, devuelve '')
  */
 export function sanitizeString(input, options = {}) {
-  if (typeof input !== 'string') {
-    return input
+  if (input == null || typeof input !== 'string') {
+    return ''
   }
 
   const {
@@ -20,9 +23,15 @@ export function sanitizeString(input, options = {}) {
     trim = true,
     removeScripts = true,
     removeSQL = true,
+    removeControlChars = true,
   } = options
 
   let sanitized = input
+
+  // Eliminar caracteres de control y null byte (riesgo de inyección y corrupción)
+  if (removeControlChars) {
+    sanitized = sanitized.replace(CONTROL_CHARS_REGEX, '')
+  }
 
   // Trim si está habilitado
   if (trim) {
@@ -46,17 +55,13 @@ export function sanitizeString(input, options = {}) {
     sanitized = sanitized.replace(/data:text\/html/gi, '')
   }
 
-  // Remover patrones SQL peligrosos
+  // Remover patrones SQL peligrosos (la protección real es usar consultas parametrizadas en backend)
   if (removeSQL) {
-    // Remover comentarios SQL
     sanitized = sanitized.replace(/--/g, '')
     sanitized = sanitized.replace(/\/\*/g, '')
     sanitized = sanitized.replace(/\*\//g, '')
-    
-    // Remover comandos SQL peligrosos (solo en contexto de strings, no en palabras completas)
     const sqlKeywords = ['DROP', 'DELETE', 'INSERT', 'UPDATE', 'ALTER', 'CREATE', 'EXEC', 'EXECUTE']
     sqlKeywords.forEach(keyword => {
-      // Solo remover si está seguido de espacio o punto y coma (no en medio de palabras)
       const regex = new RegExp(`\\b${keyword}\\s+`, 'gi')
       sanitized = sanitized.replace(regex, '')
     })
@@ -137,16 +142,33 @@ export function createSanitizedHandler(setValue, options = {}) {
 }
 
 /**
- * Sanitiza un número (solo permite dígitos y puntos decimales)
- * @param {string} input - String a sanitizar
- * @returns {string} - String con solo números y punto decimal
+ * Sanitiza un número (solo permite dígitos y un punto decimal)
+ * @param {string|number} input - Valor a sanitizar
+ * @returns {string} - String con solo números y punto decimal (o '' si no es string/number)
  */
 export function sanitizeNumber(input) {
-  if (typeof input !== 'string') {
-    return input
-  }
-  // Solo permite dígitos y un punto decimal
-  return input.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1')
+  if (input == null) return ''
+  if (typeof input === 'number' && !Number.isNaN(input)) return String(input).replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1')
+  if (typeof input !== 'string') return ''
+  const cleaned = input.replace(CONTROL_CHARS_REGEX, '')
+  return cleaned.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1')
+}
+
+/**
+ * Sanitiza un valor de hora: solo permite dígitos y un carácter ':' (formato HH:MM).
+ * Útil para inputs de hora libres. No fuerza formato; solo elimina caracteres no permitidos.
+ * @param {string} input - String a sanitizar
+ * @returns {string} - String con solo dígitos y ':' (máx. un ':' y 4 dígitos para HHMM)
+ */
+export function sanitizeTime(input) {
+  if (input == null || typeof input !== 'string') return ''
+  const s = input.replace(CONTROL_CHARS_REGEX, '').trim()
+  const allowed = s.replace(/[^\d:]/g, '')
+  const firstColon = allowed.indexOf(':')
+  if (firstColon === -1) return allowed.slice(0, 4)
+  const before = allowed.slice(0, firstColon).slice(0, 2)
+  const after = allowed.slice(firstColon + 1).replace(/:/g, '').slice(0, 2)
+  return before + ':' + after
 }
 
 /**
@@ -155,11 +177,12 @@ export function sanitizeNumber(input) {
  * @returns {string} - String sanitizado para email
  */
 export function sanitizeEmail(input) {
-  if (typeof input !== 'string') {
-    return input
+  if (input == null || typeof input !== 'string') {
+    return ''
   }
-  // Solo permite caracteres válidos para email: letras, números, @, ., -, _
-  return input.replace(/[^a-zA-Z0-9@._-]/g, '')
+  const trimmed = input.replace(CONTROL_CHARS_REGEX, '').trim()
+  // Permite letras, números, @, ., -, _, + (plus addressing)
+  return trimmed.replace(/[^a-zA-Z0-9@._+-]/g, '')
 }
 
 /**
@@ -168,36 +191,40 @@ export function sanitizeEmail(input) {
  * @returns {string} - String sanitizado para RUT
  */
 export function sanitizeRut(input) {
-  if (typeof input !== 'string') {
-    return input
+  if (input == null || typeof input !== 'string') {
+    return ''
   }
-  // Solo permite dígitos, puntos, guiones y K/k
-  return input.replace(/[^\d.\-kK]/g, '')
+  const trimmed = input.replace(CONTROL_CHARS_REGEX, '').trim()
+  return trimmed.replace(/[^\d.\-kK]/g, '')
 }
 
 /**
- * Sanitiza un código de insumo. Libre para que cada clínica use su formato
- * (ej. ins-013, ABC.123, 001). Solo se eliminan caracteres de control y riesgosos.
+ * Sanitiza un código de insumo o identificador (ej. username).
+ * Elimina caracteres de control y símbolos que podrían causar XSS si se renderizan.
  * @param {string} input - String a sanitizar
  * @returns {string} - String sanitizado para código
  */
 export function sanitizeCode(input) {
-  if (typeof input !== 'string') {
-    return input
+  if (input == null || typeof input !== 'string') {
+    return ''
   }
-  // Permite letras, números, guiones, guiones bajos, puntos, barras y espacios
-  return input.replace(/[\x00-\x1F\x7F]/g, '')
+  let s = input.replace(CONTROL_CHARS_REGEX, '')
+  // Evitar XSS: quitar < > & " ' cuando el código se muestra en HTML
+  s = s.replace(/</g, '').replace(/>/g, '').replace(/&/g, '').replace(/"/g, '').replace(/'/g, '')
+  return s.trim()
 }
 
 /**
- * Sanitiza un campo de contraseña: solo elimina scripts e inyecciones,
- * sin escapar caracteres especiales (para no alterar la contraseña).
+ * Sanitiza un campo de contraseña: elimina scripts, eventos y caracteres de control
+ * (p. ej. null byte), sin escapar caracteres especiales para no alterar la contraseña.
  * @param {string} input - String a sanitizar
  * @returns {string} - String sanitizado para contraseña
  */
 export function sanitizePassword(input) {
-  if (typeof input !== 'string') {
-    return input
+  if (input == null || typeof input !== 'string') {
+    return ''
   }
-  return sanitizeString(input, { allowHTML: true, trim: false })
+  // Quitar caracteres de control (incl. null byte) que pueden causar bypass
+  const withoutControl = input.replace(CONTROL_CHARS_REGEX, '')
+  return sanitizeString(withoutControl, { allowHTML: true, trim: false })
 }
