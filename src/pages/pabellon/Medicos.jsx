@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../config/supabase'
-import { Plus, Edit, Trash2, CheckCircle2, XCircle, Globe, Key, Eye, EyeOff, Search, Download, FileSpreadsheet } from 'lucide-react'
+import { Plus, Edit, Trash2, CheckCircle2, XCircle, Globe, Key, Eye, EyeOff, Search, Download, FileSpreadsheet, Palmtree, UserCheck } from 'lucide-react'
 import { formatRut, cleanRut, validateRut } from '../../utils/rutFormatter'
 import { useNotifications } from '../../hooks/useNotifications'
 import toast from 'react-hot-toast'
@@ -440,6 +440,26 @@ export default function Medicos() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['medicos'])
+    },
+  })
+
+  const toggleEstado = useMutation({
+    mutationFn: async ({ id, estado }) => {
+      const nuevoEstado = estado === 'activo' ? 'vacaciones' : 'activo'
+      const { error } = await supabase
+        .from('doctors')
+        .update({ estado: nuevoEstado })
+        .eq('id', id)
+      if (error) throw error
+      return nuevoEstado
+    },
+    onSuccess: (nuevoEstado) => {
+      queryClient.invalidateQueries(['medicos'])
+      toast.success(`Médico cambiado a ${nuevoEstado === 'activo' ? 'activo' : 'vacaciones'}`)
+    },
+    onError: (error) => {
+      toast.error('Error al cambiar estado del médico')
+      logger.error('Error toggleEstado:', error)
     },
   })
 
@@ -1058,10 +1078,32 @@ export default function Medicos() {
                           )}
                         </button>
                         <button
+                          onClick={() => toggleEstado.mutate({ id: medico.id, estado: medico.estado })}
+                          className={`p-2 rounded transition-colors ${
+                            medico.estado === 'activo'
+                              ? theme === 'dark'
+                                ? 'text-yellow-400 hover:bg-yellow-900/30 hover:text-yellow-300'
+                                : 'text-yellow-600 hover:bg-yellow-50'
+                              : theme === 'dark'
+                                ? 'text-blue-400 hover:bg-blue-900/30 hover:text-blue-300'
+                                : 'text-blue-600 hover:bg-blue-50'
+                          }`}
+                          title={medico.estado === 'activo' ? 'Poner en vacaciones' : 'Activar médico'}
+                          disabled={toggleEstado.isPending}
+                        >
+                          {toggleEstado.isPending ? (
+                            <LoadingSpinner size="sm" />
+                          ) : medico.estado === 'activo' ? (
+                            <Palmtree className="w-5 h-5" />
+                          ) : (
+                            <UserCheck className="w-5 h-5" />
+                          )}
+                        </button>
+                        <button
                           onClick={() => handleEliminar(medico)}
                           className={`p-2 rounded transition-colors ${
-                            theme === 'dark' 
-                              ? 'text-red-400 hover:bg-red-900/30 hover:text-red-300' 
+                            theme === 'dark'
+                              ? 'text-red-400 hover:bg-red-900/30 hover:text-red-300'
                               : 'text-red-600 hover:bg-red-50'
                           }`}
                           title="Eliminar médico"

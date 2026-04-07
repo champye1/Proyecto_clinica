@@ -2,10 +2,10 @@ import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabase'
-import { 
-  Clock, 
-  Activity, 
-  Bed, 
+import {
+  Clock,
+  Activity,
+  Bed,
   AlertCircle,
   CheckCircle2,
   Plus,
@@ -19,7 +19,8 @@ import {
   MessageSquare,
   BarChart3,
   Timer,
-  Trash2
+  Trash2,
+  PhoneCall
 } from 'lucide-react'
 import { format, subDays, eachDayOfInterval } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -60,6 +61,38 @@ export default function Dashboard() {
       return data
     },
   })
+
+  // Órdenes sin agendar: notificaciones no leídas de tipo 'orden_sin_agendar'
+  const { data: ordenesNotificaciones = [], refetch: refetchOrdenes } = useQuery({
+    queryKey: ['ordenes-sin-agendar-notifs'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return []
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('id, mensaje, created_at, relacionado_con')
+        .eq('user_id', user.id)
+        .eq('tipo', 'orden_sin_agendar')
+        .eq('vista', false)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+      if (error) return []
+      return data || []
+    },
+    refetchInterval: 30000,
+  })
+
+  const marcarOrdenesVistas = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user || ordenesNotificaciones.length === 0) return
+    await supabase
+      .from('notifications')
+      .update({ vista: true })
+      .eq('user_id', user.id)
+      .eq('tipo', 'orden_sin_agendar')
+      .eq('vista', false)
+    refetchOrdenes()
+  }
 
   // Cirugías de hoy
   const { data: cirugiasHoy = [] } = useQuery({
@@ -430,6 +463,61 @@ export default function Dashboard() {
           <Inbox size={14} className="sm:w-4 sm:h-4" /> Solicitudes
         </button>
       </div>
+
+      {/* Banner: Órdenes sin agendar */}
+      {ordenesNotificaciones.length > 0 && (
+        <div className={`mb-6 sm:mb-8 rounded-2xl border-2 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4 ${
+          theme === 'dark'
+            ? 'bg-orange-950/40 border-orange-700 text-orange-100'
+            : 'bg-orange-50 border-orange-400 text-orange-900'
+        }`}>
+          <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${
+            theme === 'dark' ? 'bg-orange-700/50' : 'bg-orange-100'
+          }`}>
+            <PhoneCall size={20} className={theme === 'dark' ? 'text-orange-300' : 'text-orange-600'} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-black text-sm sm:text-base uppercase tracking-tight">
+              {ordenesNotificaciones.length === 1
+                ? '1 paciente con orden de hospitalización sin agendar'
+                : `${ordenesNotificaciones.length} pacientes con orden de hospitalización sin agendar`}
+            </p>
+            <p className={`text-xs sm:text-sm font-semibold mt-1 ${
+              theme === 'dark' ? 'text-orange-300' : 'text-orange-700'
+            }`}>
+              Contactar al médico para ofrecer horas disponibles
+            </p>
+            <ul className={`mt-2 space-y-0.5 ${theme === 'dark' ? 'text-orange-200' : 'text-orange-800'}`}>
+              {ordenesNotificaciones.slice(0, 3).map(n => (
+                <li key={n.id} className="text-xs font-medium truncate">• {n.mensaje}</li>
+              ))}
+              {ordenesNotificaciones.length > 3 && (
+                <li className="text-xs font-bold">
+                  + {ordenesNotificaciones.length - 3} más...
+                </li>
+              )}
+            </ul>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 flex-shrink-0 w-full sm:w-auto">
+            <button
+              onClick={() => { marcarOrdenesVistas(); navigate('/pabellon/solicitudes') }}
+              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-black text-xs uppercase rounded-xl transition-colors touch-manipulation w-full sm:w-auto"
+            >
+              Ver solicitudes
+            </button>
+            <button
+              onClick={marcarOrdenesVistas}
+              className={`px-3 py-2 font-black text-xs uppercase rounded-xl transition-colors touch-manipulation w-full sm:w-auto ${
+                theme === 'dark'
+                  ? 'bg-orange-900/50 hover:bg-orange-900 text-orange-300'
+                  : 'bg-orange-100 hover:bg-orange-200 text-orange-700'
+              }`}
+            >
+              Marcar vistas
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Métricas principales (3 tarjetas) */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8 lg:mb-10">

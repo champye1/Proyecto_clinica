@@ -7,6 +7,7 @@ import LoginPabellon from './pages/auth/LoginPabellon'
 import LoginDoctor from './pages/auth/LoginDoctor'
 import RecuperarContraseña from './pages/auth/RecuperarContraseña'
 import RestablecerContraseña from './pages/auth/RestablecerContraseña'
+import ContactoExterno from './pages/public/ContactoExterno'
 import PabellonLayout from './layouts/PabellonLayout'
 import DoctorLayout from './layouts/DoctorLayout'
 import LoadingSpinner from './components/common/LoadingSpinner'
@@ -186,6 +187,8 @@ function AppContent() {
 
       <Route path="/recuperar-contrasena" element={<RecuperarContraseña />} />
       <Route path="/restablecer-contrasena" element={<RestablecerContraseña />} />
+      {/* Ruta pública para médicos externos — no requiere autenticación */}
+      <Route path="/contacto" element={<ContactoExterno />} />
       
       <Route 
         path="/pabellon/*" 
