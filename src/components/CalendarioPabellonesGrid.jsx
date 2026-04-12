@@ -7,7 +7,7 @@ import { es } from 'date-fns/locale'
 import LoadingSpinner from './common/LoadingSpinner'
 
 const HORAS = []
-for (let i = 8; i <= 17; i++) {
+for (let i = 8; i <= 23; i++) {
   HORAS.push(`${i.toString().padStart(2, '0')}:00`)
 }
 
@@ -85,7 +85,10 @@ export default function CalendarioPabellonesGrid({ theme, inlineMode = false, on
   }, [slots])
 
   const toggleSlot = (roomId, nombrePabellon, horaInicio) => {
-    const horaFin = (parseInt(horaInicio.slice(0, 2), 10) + 1).toString().padStart(2, '0') + ':00'
+    const startHour = parseInt(horaInicio.slice(0, 2), 10)
+    const horaFin = startHour >= 23
+      ? '23:59'
+      : (startHour + 1).toString().padStart(2, '0') + ':00'
     setSelectedSlots(prev => {
       const exists = prev.some(s => s.roomId === roomId && s.horaInicio === horaInicio)
       if (exists) return prev.filter(s => !(s.roomId === roomId && s.horaInicio === horaInicio))

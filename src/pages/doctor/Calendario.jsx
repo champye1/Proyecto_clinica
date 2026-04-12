@@ -232,10 +232,10 @@ const WeekView = ({ weekStart, cirugias, onDayClick, pabellones }) => {
 
 // Componente DayView (Slots Horarios)
 const DayView = ({ day, pabellones, cirugias }) => {
-  // Generar slots de 08:00 a 20:00 cada 1 hora (simplificado)
+  // Generar slots de 08:00 a 24:00 cada 1 hora (simplificado)
   const slots = useMemo(() => {
     const hours = []
-    for (let i = 8; i < 20; i++) {
+    for (let i = 8; i < 24; i++) {
       hours.push(`${i.toString().padStart(2, '0')}:00`)
     }
     return hours

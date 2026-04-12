@@ -141,6 +141,319 @@ const Breadcrumbs = ({ anio, view, selectedMonth, selectedWeek, selectedDay, onN
   )
 }
 
+// Componente FullMonthView (Calendario Mensual Completo)
+const FullMonthView = ({ anio, monthIndex, cirugias, pabellones, onDayClick, onNavigate }) => {
+  const { days, weekDays } = useMemo(() => {
+    const startMonth = new Date(anio, monthIndex, 1)
+    const endMonth = endOfMonth(startMonth)
+    const startCalendar = startOfWeek(startMonth, { weekStartsOn: 1 })
+    const endCalendar = endOfWeek(endMonth, { weekStartsOn: 1 })
+    
+    const days = eachDayOfInterval({ start: startCalendar, end: endCalendar })
+    const weekDays = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+    
+    return { days, weekDays }
+  }, [anio, monthIndex])
+
+  // Reutilizar lógica de ocupación
+  const getOcupacionGlobal = (day) => {
+    const dayStr = format(day, 'yyyy-MM-dd')
+    const cirugiasDia = cirugias.filter(c => c.fecha === dayStr)
+    
+    const minutosOcupados = cirugiasDia.reduce((acc, curr) => {
+      const [h1, m1] = curr.hora_inicio.split(':').map(Number)
+      const [h2, m2] = curr.hora_fin.split(':').map(Number)
+      const startMins = h1 * 60 + m1
+      const endMins = h2 * 60 + m2
+      return acc + (endMins - startMins)
+    }, 0)
+    
+    // Total de minutos disponibles (pabellones * 12 horas * 60 min)
+    const totalMinutos = pabellones.length * 12 * 60
+    return totalMinutos > 0 ? Math.min(100, Math.round((minutosOcupados / totalMinutos) * 100)) : 0
+  }
+
+  const handlePrevMonth = () => {
+    const newMonth = monthIndex === 0 ? 11 : monthIndex - 1
+    const newAnio = monthIndex === 0 ? anio - 1 : anio
+    onNavigate('month', newAnio, newMonth)
+  }
+
+  const handleNextMonth = () => {
+    const newMonth = monthIndex === 11 ? 0 : monthIndex + 1
+    const newAnio = monthIndex === 11 ? anio + 1 : anio
+    onNavigate('month', newAnio, newMonth)
+  }
+
+  return (
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Header de Navegación del Mes */}
+      <div className="flex items-center justify-between mb-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+        <button 
+          onClick={handlePrevMonth}
+          className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500 hover:text-blue-600"
+          title="Mes anterior"
+        >
+          <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+        </button>
+        
+        <h2 className="text-lg sm:text-xl font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+          <CalendarIcon className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500" />
+          {MESES[monthIndex].nombre} {anio}
+        </h2>
+
+        <button 
+          onClick={handleNextMonth}
+          className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500 hover:text-blue-600"
+          title="Mes siguiente"
+        >
+          <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
+        </button>
+      </div>
+
+      {/* Encabezados de días */}
+      <div className="grid grid-cols-7 gap-1 mb-2">
+        {weekDays.map(d => (
+          <div key={d} className="text-center text-xs font-black text-slate-400 uppercase py-2">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Grilla de días */}
+      <div className="grid grid-cols-7 gap-1 sm:gap-2 auto-rows-fr">
+        {days.map(day => {
+          const isCurrentMonth = isSameMonth(day, new Date(anio, monthIndex))
+          const dayStr = format(day, 'yyyy-MM-dd')
+          const ocupacion = getOcupacionGlobal(day)
+          const isToday = isSameDay(day, new Date())
+          const isPastDay = isPast(startOfDay(day)) && !isToday
+
+          return (
+            <button
+              key={day.toISOString()}
+              onClick={() => onDayClick(day)}
+              className={`
+                relative p-2 sm:p-3 h-24 sm:h-32 rounded-xl flex flex-col justify-between transition-all
+                ${!isCurrentMonth ? 'bg-slate-50/50 text-slate-300' : 'bg-white hover:shadow-lg hover:scale-[1.02] hover:z-10 border border-slate-100'}
+                ${isToday ? 'ring-2 ring-blue-500 ring-offset-2' : ''}
+                ${ocupacion >= 100 ? 'bg-red-50' : ''}
+              `}
+            >
+              <div className="flex justify-between items-start w-full">
+                <span className={`text-sm sm:text-lg font-black ${!isCurrentMonth ? 'text-slate-300' : 'text-slate-700'}`}>
+                  {format(day, 'd')}
+                </span>
+                {isCurrentMonth && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                    ocupacion > 80 ? 'bg-red-100 text-red-700' :
+                    ocupacion > 50 ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-green-100 text-green-700'
+                  }`}>
+                    {ocupacion}%
+                  </span>
+                )}
+              </div>
+
+              {isCurrentMonth && (
+                <div className="w-full mt-2">
+                  <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden mb-1">
+                    <div 
+                      className={`h-full rounded-full ${
+                        ocupacion > 80 ? 'bg-red-500' :
+                        ocupacion > 50 ? 'bg-yellow-500' :
+                        'bg-green-500'
+                      }`}
+                      style={{ width: `${ocupacion}%` }}
+                    />
+                  </div>
+                  {ocupacion >= 100 && (
+                    <div className="flex justify-center mt-1">
+                      <span className="text-[9px] font-black text-red-600 bg-red-100 px-1 rounded uppercase">Full</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// Componente DayDetailsModal (Panel Lateral para Detalles)
+const DayDetailsModal = ({ isOpen, onClose, day, cirugias, pabellones, onSelectSlot }) => {
+  const dayCirugias = useMemo(() => {
+    if (!day) return []
+    const dayStr = format(day, 'yyyy-MM-dd')
+    return cirugias.filter(c => c.fecha === dayStr).sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio))
+  }, [day, cirugias])
+
+  const availableSlots = useMemo(() => {
+    if (!day) return []
+    const slots = []
+    
+    // Generar slots por pabellón (intervalos de 30 minutos)
+    pabellones.forEach(pabellon => {
+      const pabellonCirugias = dayCirugias.filter(c => c.operating_room_id === pabellon.id)
+      
+      for (let h = 8; h < 20; h++) {
+        for (let m = 0; m < 60; m += 30) {
+          const timeStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
+          
+          // Verificar si el slot inicia dentro de una cirugía existente
+          const isOccupied = pabellonCirugias.some(c => 
+            c.hora_inicio <= timeStr && c.hora_fin > timeStr
+          )
+          
+          if (!isOccupied) {
+            // Calcular duración máxima disponible hasta la siguiente cirugía o fin del día
+            const nextSurgery = pabellonCirugias.find(c => c.hora_inicio > timeStr)
+            let maxDurationMinutes = 0
+            
+            if (nextSurgery) {
+              const [h1, m1] = timeStr.split(':').map(Number)
+              const [h2, m2] = nextSurgery.hora_inicio.split(':').map(Number)
+              maxDurationMinutes = (h2 * 60 + m2) - (h1 * 60 + m1)
+            } else {
+              // Hasta el final del día (23:59)
+              const [h1, m1] = timeStr.split(':').map(Number)
+              maxDurationMinutes = (24 * 60) - (h1 * 60 + m1)
+            }
+
+            const hours = Math.floor(maxDurationMinutes / 60)
+            const mins = maxDurationMinutes % 60
+            const durationStr = `${hours}h${mins > 0 ? ` ${mins}m` : ''}`
+
+            slots.push({
+              pabellon,
+              time: timeStr,
+              maxDuration: durationStr,
+              maxDurationMinutes
+            })
+          }
+        }
+      }
+    })
+    return slots
+  }, [day, dayCirugias, pabellones])
+
+  if (!day) return null
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`Detalles del ${format(day, "d 'de' MMMM", { locale: es })}`}
+      className="max-w-5xl"
+    >
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[60vh]">
+        {/* Sección 1: Horas Ocupadas */}
+        <div className="bg-slate-50 rounded-2xl p-4 flex flex-col h-full overflow-hidden border border-slate-100">
+          <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-4 flex items-center gap-2 sticky top-0 bg-slate-50 z-10 py-2">
+            <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm" />
+            Horarios Ocupados ({dayCirugias.length})
+          </h3>
+          <div className="overflow-y-auto space-y-3 pr-2 custom-scrollbar flex-1 pb-4">
+            {dayCirugias.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-60">
+                <Clock className="w-12 h-12 mb-2 stroke-1" />
+                <p className="text-xs font-medium italic">No hay cirugías programadas</p>
+              </div>
+            ) : (
+              dayCirugias.map(c => (
+                <div key={c.id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 group-hover:w-1.5 transition-all" />
+                  <div className="flex justify-between items-start mb-2 pl-2">
+                    <span className="text-xs font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-100">
+                      {c.hora_inicio.slice(0, 5)} - {c.hora_fin.slice(0, 5)}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded">
+                      {pabellones.find(p => p.id === c.operating_room_id)?.nombre || 'Pabellón ?'}
+                    </span>
+                  </div>
+                  <div className="pl-2">
+                    <p className="text-sm font-bold text-slate-800 mb-0.5">
+                      {c.patients?.nombre} {c.patients?.apellido}
+                    </p>
+                    <p className="text-xs text-slate-500 font-medium flex items-center gap-1.5">
+                      <Stethoscope className="w-3 h-3" />
+                      Dr. {c.doctors?.apellido} 
+                      <span className="w-1 h-1 rounded-full bg-slate-300" />
+                      {codigosOperaciones.find(op => op.codigo === c.codigo_operacion)?.nombre || c.codigo_operacion}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Sección 2: Pabellones Disponibles */}
+        <div className="bg-blue-50/30 rounded-2xl p-4 flex flex-col h-full overflow-hidden border border-blue-100">
+          <h3 className="text-sm font-black text-blue-900 uppercase tracking-widest mb-1 flex items-center gap-2 sticky top-0 bg-transparent z-10 py-2">
+            <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-sm" />
+            Disponibilidad
+          </h3>
+          <p className="text-[10px] text-slate-500 mb-4 px-1 font-medium">
+            Seleccione un horario de inicio. Se muestra el tiempo disponible hasta el próximo bloqueo.
+          </p>
+          <div className="overflow-y-auto pr-2 custom-scrollbar flex-1 pb-4">
+            {pabellones.map(p => {
+              const pSlots = availableSlots.filter(s => s.pabellon.id === p.id)
+              // Si no hay slots y no hay cirugías, mostrar vacío? No, mostrar slots libres todo el día.
+              
+              return (
+                <div key={p.id} className="mb-4 bg-white rounded-xl border border-blue-100 p-3 shadow-sm hover:border-blue-300 transition-colors">
+                  <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-100">
+                    <h4 className="text-xs font-black text-slate-700 uppercase flex items-center gap-2">
+                      <Activity className="w-3.5 h-3.5 text-blue-500" />
+                      {p.nombre}
+                    </h4>
+                    {p.camillas_disponibles && (
+                      <span className="text-[9px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full">
+                        {p.camillas_disponibles} camilla{p.camillas_disponibles !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+                  
+                  {pSlots.length > 0 ? (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2">
+                      {pSlots.map((slot, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => onSelectSlot(slot)}
+                          className="group relative flex flex-col items-center justify-center py-2 px-1 rounded-lg border transition-all active:scale-95 bg-green-50 border-green-100 text-green-700 hover:bg-green-100 hover:border-green-200 hover:shadow-sm"
+                        >
+                          <span className="text-xs font-black">{slot.time}</span>
+                          <span className="text-[8px] font-bold opacity-70 group-hover:opacity-100 transition-opacity">
+                             max {slot.maxDuration}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Sin disponibilidad</p>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+            {availableSlots.length === 0 && (
+              <div className="h-full flex flex-col items-center justify-center text-red-400 opacity-60">
+                 <XCircle className="w-12 h-12 mb-2 stroke-1" />
+                 <p className="text-xs font-medium italic">Día completamente ocupado</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 // Componente MonthView (Lista de Semanas)
 const MonthView = ({ anio, monthIndex, onWeekClick }) => {
   const weeks = useMemo(() => {
@@ -366,8 +679,8 @@ const WeekView = ({ weekStart, cirugias, pabellonId, onDayClick, pabellones, sel
   )
 }
 
-// Constantes para slots de tiempo (8:00 AM a 7:00 PM en bloques de 1 hora)
-const TIME_SLOTS = Array.from({ length: 12 }, (_, i) => `${(i + 8).toString().padStart(2, '0')}:00`)
+// Constantes para slots de tiempo (8:00 AM a 11:00 PM en bloques de 1 hora)
+const TIME_SLOTS = Array.from({ length: 16 }, (_, i) => `${(i + 8).toString().padStart(2, '0')}:00`)
 
 // Helper para obtener el estado visual de una celda
 const getCellStatusClass = (status, isSelected, isAvailable) => {
@@ -857,7 +1170,7 @@ const DayView = ({ day, pabellones, cirugias, bloqueos, onSlotSelect, selectedSl
                       <Tooltip content={currentRequest ? "Click para seleccionar este horario" : "Click para ver detalles del horario disponible"}>
                         <div className={`w-full h-full border-2 rounded-lg sm:rounded-xl p-2 sm:p-3 flex flex-col items-center justify-center transition-all active:scale-95 ${
                           isSelected 
-                            ? 'border-blue-500 bg-blue-50 shadow-lg shadow-blue-200/50' 
+                            ? 'border-blue-500 bg-blue-50 shadow-lg shadow-blue-200/50 ring-4 ring-blue-500 animate-pulse' 
                             : isAvailable
                             ? 'border-green-300 bg-green-50 hover:border-green-500 hover:bg-green-100 hover:shadow-md active:bg-green-200'
                             : 'border-slate-200 bg-slate-50'
@@ -941,7 +1254,9 @@ export default function Calendario() {
   const { theme } = useTheme()
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [horaFin, setHoraFin] = useState('')
+  const [showDayDetailsModal, setShowDayDetailsModal] = useState(false)
   const [showDetallesModal, setShowDetallesModal] = useState(false)
+  const [dayDetailsDate, setDayDetailsDate] = useState(null)
   const [slotDetalle, setSlotDetalle] = useState(null)
   const [showConfirmCancelar, setShowConfirmCancelar] = useState(false)
   const [cirugiaACancelar, setCirugiaACancelar] = useState(null)
@@ -984,6 +1299,24 @@ export default function Calendario() {
     }
   }, [])
 
+  // Llegada desde "Aceptar horario médico": abrir vista día en la fecha preferida
+  useEffect(() => {
+    try {
+      const fromAceptar = location.state?.fromAceptarHorarioMedico === true || location.state?.fromResume === true
+      if (!fromAceptar) return
+      const slotStr = sessionStorage.getItem('slot_seleccionado')
+      if (!slotStr) return
+      const slot = JSON.parse(slotStr)
+      const fecha = new Date(slot.date)
+      if (isNaN(fecha.getTime())) return
+      setAnio(fecha.getFullYear())
+      setSelectedMonth(fecha.getMonth())
+      setSelectedDay(fecha)
+      setView('day')
+    } catch (e) {
+      logger.errorWithContext('Error al abrir vista día desde aceptar horario', e)
+    }
+  }, [location.state?.fromAceptarHorarioMedico, location.state?.fromResume])
   // Cargar cirugía y solicitud cuando se llega en modo reagendar (desde Solicitudes o notificación)
   useEffect(() => {
     if (!isReagendarMode) return
@@ -1040,6 +1373,36 @@ export default function Calendario() {
 
     loadReagendar()
   }, [isReagendarMode, location.state?.surgeryRequestId])
+  
+  useEffect(() => {
+    try {
+      const stateHighlight = location.state?.highlight
+      let hl = stateHighlight
+      if (!hl) {
+        const hlStr = sessionStorage.getItem('highlight_slot')
+        if (hlStr) hl = JSON.parse(hlStr)
+      }
+      if (!hl) return
+      const dateObj = parseISO(hl.date)
+      if (isNaN(dateObj.getTime())) {
+        showError('Fecha de la operación inválida o no disponible en el calendario.')
+        return
+      }
+      const timeValid = TIME_SLOTS.includes(hl.time)
+      if (!timeValid) {
+        showError('Hora de la operación inválida o fuera del rango disponible.')
+        return
+      }
+      setAnio(dateObj.getFullYear())
+      setSelectedMonth(dateObj.getMonth())
+      setSelectedDay(dateObj)
+      setView('day')
+      setSelectedSlot({ pabellonId: hl.pabellonId, time: hl.time, date: dateObj })
+      navigate(location.pathname, { replace: true })
+    } catch (e) {
+      logger.errorWithContext('Error procesando highlight de calendario', e)
+    }
+  }, [location.state?.highlight])
   
   // Mutation para programar la cirugía usando función PostgreSQL atómica
   const programarCirugia = useMutation({
@@ -1229,6 +1592,11 @@ export default function Calendario() {
       return
     }
 
+    // Confirmación adicional antes de crear la reserva
+    if (!window.confirm('¿Está seguro de que desea crear esta reserva?')) {
+      return
+    }
+
     const formData = {
       fecha: format(selectedSlot.date, 'yyyy-MM-dd'),
       hora_inicio: selectedSlot.time,
@@ -1245,6 +1613,27 @@ export default function Calendario() {
         formData,
       })
     }
+  }
+
+  // Función para manejar la selección de un slot desde el modal de detalles
+  const handleSelectSlotFromModal = (slot) => {
+    // slot tiene { pabellon, time }
+    if (!dayDetailsDate) return
+
+    setSelectedSlot({
+      pabellonId: slot.pabellon.id,
+      time: slot.time,
+      date: dayDetailsDate
+    })
+    setShowDayDetailsModal(false)
+    
+    // Calcular hora fin por defecto (1 hora después) y abrir confirmación
+    const [hours, minutes] = slot.time.split(':')
+    const horaFinDate = new Date()
+    horaFinDate.setHours(parseInt(hours) + 1, parseInt(minutes), 0, 0)
+    const horaFinStr = `${horaFinDate.getHours().toString().padStart(2, '0')}:${horaFinDate.getMinutes().toString().padStart(2, '0')}`
+    setHoraFin(horaFinStr)
+    setShowConfirmModal(true)
   }
 
   // Mutation para cancelar cirugía (pabellón)
@@ -1299,6 +1688,7 @@ export default function Calendario() {
       setShowConfirmCancelar(false)
       setCirugiaACancelar(null)
       setShowDetallesModal(false)
+      setShowDayDetailsModal(false)
       setSlotDetalle(null)
     },
     onError: (error) => {
@@ -1330,6 +1720,7 @@ export default function Calendario() {
 
   const { data: cirugias = [], isLoading: loadingCirugias } = useQuery({
     queryKey: ['calendario-anual-cirugias', anio, filtroPaciente],
+    refetchInterval: 10000, // Actualizar cada 10 segundos
     queryFn: async () => {
       // Si hay filtro de paciente, buscar también en fechas pasadas
       const fechaLimite = filtroPaciente ? null : fechaInicioStr
@@ -1392,6 +1783,7 @@ export default function Calendario() {
 
   const { data: bloqueos = [], isLoading: loadingBloqueos } = useQuery({
     queryKey: ['calendario-anual-bloqueos', anio],
+    refetchInterval: 10000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('schedule_blocks')
@@ -1408,6 +1800,7 @@ export default function Calendario() {
   // Query para obtener cirugías del día seleccionado con detalles completos
   const { data: cirugiasDetalle = [] } = useQuery({
     queryKey: ['cirugias-dia-detalle', selectedDay, filtroPaciente],
+    refetchInterval: 10000, // Actualizar cada 10 segundos
     queryFn: async () => {
       if (!selectedDay) return []
       
@@ -1500,6 +1893,19 @@ export default function Calendario() {
     })
   }, [anio, pabellonId, cirugias, bloqueos])
 
+  const isOverlap = useMemo(() => {
+    if (!selectedSlot || !horaFin || !horaFin.match(/^\d{2}:\d{2}$/)) return false
+    const fechaStr = format(selectedSlot.date, 'yyyy-MM-dd')
+    return cirugias.some(c => {
+       if (c.fecha !== fechaStr) return false
+       if (c.operating_room_id !== selectedSlot.pabellonId) return false
+       if (c.estado === 'cancelada') return false
+       if (cirugiaAReagendar && c.id === cirugiaAReagendar.id) return false
+       
+       return selectedSlot.time < c.hora_fin && horaFin > c.hora_inicio
+    })
+  }, [selectedSlot, horaFin, cirugias, cirugiaAReagendar])
+
   const cargando = loadingCirugias || loadingBloqueos
 
   const handleNavigate = (targetView, newAnio = null, newMonth = null) => {
@@ -1543,10 +1949,17 @@ export default function Calendario() {
           </div>
           <button
             type="button"
-            onClick={() => navigate('/pabellon/solicitudes', { state: { surgeryRequestId: location.state?.surgeryRequestId } })}
+            onClick={() => {
+              try {
+                if (currentRequest) {
+                  sessionStorage.setItem('solicitud_gestionando', JSON.stringify(currentRequest))
+                }
+              } catch {}
+              navigate('/pabellon/solicitudes', { state: { openProgramacion: true } })
+            }}
             className="text-xs font-bold underline hover:no-underline"
           >
-            Ver Solicitudes
+            Ver el agendamiento
           </button>
         </div>
       )}
@@ -1782,15 +2195,28 @@ export default function Calendario() {
           )}
 
           {view === 'month' && selectedMonth !== null && (
-            <MonthView 
+            <FullMonthView 
               anio={anio} 
               monthIndex={selectedMonth} 
-              onWeekClick={(weekStart) => {
-                setSelectedWeek(weekStart)
-                setView('week')
+              cirugias={cirugias}
+              pabellones={pabellones}
+              onNavigate={handleNavigate}
+              onDayClick={(day) => {
+                setDayDetailsDate(day)
+                setShowDayDetailsModal(true)
               }}
             />
           )}
+
+          {/* Modal de Detalles del Día (Nuevo) */}
+          <DayDetailsModal
+            isOpen={showDayDetailsModal}
+            onClose={() => setShowDayDetailsModal(false)}
+            day={dayDetailsDate}
+            cirugias={cirugias}
+            pabellones={pabellones}
+            onSelectSlot={handleSelectSlotFromModal}
+          />
 
           {view === 'week' && selectedWeek && (
             <WeekView 
@@ -1950,13 +2376,29 @@ export default function Calendario() {
                 const minutosInicio = horaInicioH * 60 + horaInicioM
                 const minutosFin = horaFinH * 60 + horaFinM
                 const esValido = minutosFin > minutosInicio
+
+                if (isOverlap) {
+                  return (
+                    <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg animate-pulse">
+                      <p className="text-xs sm:text-sm text-red-700 font-black flex items-center gap-2">
+                        <AlertTriangle size={16} />
+                        Conflicto de horario detectado
+                      </p>
+                      <p className="text-[10px] sm:text-xs text-red-600 mt-1">
+                        El horario seleccionado se solapa con otra cirugía existente en este pabellón.
+                      </p>
+                    </div>
+                  )
+                }
+
                 return !esValido ? (
                   <p className="mt-2 text-xs sm:text-sm text-red-600 font-bold" role="alert">
                     La hora de fin debe ser mayor que {selectedSlot.time}
                   </p>
                 ) : (
-                  <p className="mt-2 text-xs sm:text-sm text-green-600 font-bold">
-                    ✓ Duración: {Math.round((minutosFin - minutosInicio) / 60)} horas
+                  <p className="mt-2 text-xs sm:text-sm text-green-600 font-bold flex items-center gap-1">
+                    <CheckCircle2 size={14} />
+                    Duración: {Math.round((minutosFin - minutosInicio) / 60)} horas
                   </p>
                 )
               })()}
@@ -1975,8 +2417,8 @@ export default function Calendario() {
               <Button
                 loading={programarCirugia.isPending || reagendarCirugia.isPending}
                 onClick={handleConfirmarCupo}
-                disabled={!horaFin || programarCirugia.isPending || reagendarCirugia.isPending}
-                className="flex-1 w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white touch-manipulation"
+                disabled={!horaFin || programarCirugia.isPending || reagendarCirugia.isPending || isOverlap}
+                className="flex-1 w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {cirugiaAReagendar ? 'Confirmar Reagendamiento' : 'Confirmar Agendamiento'}
               </Button>

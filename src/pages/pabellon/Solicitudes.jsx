@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../../config/supabase'
 import { CheckCircle2, XCircle, Clock, Eye, Calendar, CalendarClock, X, User, Stethoscope, Package, FileText, CheckCircle, Activity, Filter, Lock, Search } from 'lucide-react'
 import { format } from 'date-fns'
@@ -58,6 +58,26 @@ export default function Solicitudes() {
       logger.errorWithContext('Error al procesar slot seleccionado', e)
     }
   }, [])
+  const location = useLocation()
+  useEffect(() => {
+    try {
+      const openDirect = location.state?.openProgramacion === true
+      const solicitudStr = sessionStorage.getItem('solicitud_gestionando')
+      if (openDirect && solicitudStr) {
+        const solicitud = JSON.parse(solicitudStr)
+        setSolicitudProgramando(solicitud)
+        setFormProgramacion({
+          fecha: '',
+          hora_inicio: '',
+          hora_fin: '',
+          operating_room_id: '',
+          observaciones: '',
+        })
+      }
+    } catch (e) {
+      logger.errorWithContext('Error al abrir programación directa', e)
+    }
+  }, [location.state?.openProgramacion])
   const [formProgramacion, setFormProgramacion] = useState({
     fecha: '',
     hora_inicio: '',
@@ -65,6 +85,21 @@ export default function Solicitudes() {
     operating_room_id: '',
     observaciones: '',
   })
+  const [seleccionBloques, setSeleccionBloques] = useState({ pabellonId: null, times: [] })
+  const timeToMinutes = useCallback((t) => {
+    const [h, m] = String(t).split(':').map(Number)
+    return h * 60 + (m || 0)
+  }, [])
+  const sortTimesAsc = useCallback((arr) => {
+    return [...arr].sort((a, b) => timeToMinutes(a) - timeToMinutes(b))
+  }, [timeToMinutes])
+  const areContiguous = useCallback((arr) => {
+    const s = sortTimesAsc(arr)
+    for (let i = 1; i < s.length; i++) {
+      if (timeToMinutes(s[i]) - timeToMinutes(s[i - 1]) !== 60) return false
+    }
+    return true
+  }, [sortTimesAsc, timeToMinutes])
   const queryClient = useQueryClient()
 
   const { data: solicitudes = [], isLoading } = useQuery({
@@ -182,6 +217,8 @@ export default function Solicitudes() {
 
   const [showConfirmRechazar, setShowConfirmRechazar] = useState(false)
   const [solicitudARechazar, setSolicitudARechazar] = useState(null)
+  const [showConfirmAgendamiento, setShowConfirmAgendamiento] = useState(false)
+  const [confirmAgendamientoData, setConfirmAgendamientoData] = useState(null)
 
   const rechazarSolicitud = useMutation({
     mutationFn: async (id) => {
@@ -283,10 +320,10 @@ export default function Solicitudes() {
     enabled: !!formProgramacion.fecha,
   })
 
-  // Generar slots de horas (08:00 a 19:00)
+  // Generar slots de horas (08:00 a 23:00)
   const slotsHorarios = useMemo(() => {
     const hours = []
-    for (let i = 8; i < 20; i++) {
+    for (let i = 8; i < 24; i++) {
       hours.push(`${i.toString().padStart(2, '0')}:00`)
     }
     return hours
@@ -360,6 +397,13 @@ export default function Solicitudes() {
       queryClient.invalidateQueries(['solicitudes-pendientes'])
       queryClient.invalidateQueries(['cirugias-hoy'])
       queryClient.invalidateQueries(['cirugias-calendario'])
+      try {
+        const hl = sessionStorage.getItem('highlight_slot')
+        if (hl) {
+          const parsed = JSON.parse(hl)
+          navigate('/pabellon/calendario', { state: { highlight: parsed } })
+        }
+      } catch {}
       setSolicitudProgramando(null)
       setFormProgramacion({
         fecha: '',
@@ -371,6 +415,7 @@ export default function Solicitudes() {
       // Limpiar sessionStorage
       sessionStorage.removeItem('solicitud_gestionando')
       sessionStorage.removeItem('slot_seleccionado')
+      sessionStorage.removeItem('highlight_slot')
     },
     onError: (error) => {
       logger.errorWithContext('Error al programar cirugía (onError)', error)
@@ -584,43 +629,74 @@ export default function Solicitudes() {
 
   const tieneHorarioPreferido = (solicitud) => Boolean(obtenerHorarioPreferido(solicitud))
 
-  // Aceptar directamente el horario definido por el médico (sin pasar por el calendario)
+  // Nuevo flujo: mostrar resumen y luego abrir calendario con preselección
   const handleAceptarHorarioMedico = (solicitud) => {
     const horario = obtenerHorarioPreferido(solicitud)
     if (!horario) {
       showError('La solicitud no tiene un horario preferido válido para aceptar.')
       return
     }
-
-    setSolicitudAceptandoHorario(solicitud)
-
-    if (solicitud.estado === 'aceptada') {
-      reagendarConHorarioDelMedico.mutate({
-        solicitudId: solicitud.id,
-        fecha: horario.fecha,
-        operatingRoomId: horario.operatingRoomId,
-        horaInicio: horario.horaInicio,
-        horaFin: horario.horaFin,
-      })
-      return
-    }
-
-    programarConHorarioDelMedico.mutate({
-      solicitudId: solicitud.id,
-      fecha: horario.fecha,
-      operatingRoomId: horario.operatingRoomId,
-      horaInicio: horario.horaInicio,
-      horaFin: horario.horaFin,
+    // Abrir panel/modal en Solicitudes con la fecha preseleccionada y vista de pabellones
+    setSolicitudProgramando(solicitud)
+    setFormProgramacion({
+      fecha: typeof horario.fecha === 'string'
+        ? horario.fecha.slice(0, 10)
+        : new Date(horario.fecha).toISOString().slice(0, 10),
+      hora_inicio: '',
+      hora_fin: '',
+      operating_room_id: '',
+      observaciones: '',
     })
   }
 
   const handleAceptarYProgramar = (solicitud) => {
-    // Guardar la solicitud en sessionStorage para que el calendario la pueda recuperar
-    sessionStorage.setItem('solicitud_gestionando', JSON.stringify(solicitud))
-    // Navegar al calendario
-    navigate('/pabellon/calendario')
+    try {
+      if (!solicitud) {
+        showError('No se pudo abrir la gestión de cupos: solicitud inválida.')
+        return
+      }
+      sessionStorage.setItem('solicitud_gestionando', JSON.stringify(solicitud))
+      setSolicitudProgramando(solicitud)
+      setFormProgramacion({
+        fecha: '',
+        hora_inicio: '',
+        hora_fin: '',
+        operating_room_id: '',
+        observaciones: '',
+      })
+    } catch (e) {
+      logger.errorWithContext('Error al abrir gestión de cupos directamente', e)
+      showError('Ocurrió un error al abrir la gestión de cupos.')
+    }
   }
 
+  // Enviar aviso de reagendación al médico (pabellón rechaza horario propuesto)
+  const handleEnviarAvisoReagendacion = async (solicitud) => {
+    try {
+      await notificarDoctorPorReagendamiento(solicitud)
+      showSuccess('Aviso de reagendación enviado al médico.')
+    } catch (error) {
+      logger.errorWithContext('Error al enviar aviso de reagendación', error)
+      const msg = error.message || error.toString() || 'Error desconocido'
+      showError('No se pudo enviar el aviso: ' + msg)
+    }
+  }
+
+  // Gestionar hora: abrir calendario en vista diaria desde hoy con la solicitud cargada
+  const handleGestionarHora = (solicitud) => {
+    try {
+      if (!solicitud) {
+        showError('No se pudo abrir el calendario: solicitud inválida.')
+        return
+      }
+      sessionStorage.setItem('solicitud_gestionando', JSON.stringify(solicitud))
+      // sessionStorage.setItem('calendario_ir_hoy', 'day')
+      navigate('/pabellon/calendario', { state: { fromGestionHora: true, initialView: 'month' } })
+    } catch (e) {
+      logger.errorWithContext('Error al abrir calendario (gestionar hora)', e)
+      showError('Ocurrió un error al abrir el calendario.')
+    }
+  }
   // Notificar al doctor que pabellón debe reagendar antes de abrir el calendario
   const notificarDoctorPorReagendamiento = async (solicitud) => {
     const doctorUserId = solicitud?.doctors?.user_id
@@ -672,6 +748,11 @@ export default function Solicitudes() {
         }
       }
       
+      // Confirmación adicional antes de crear la reserva
+      if (!window.confirm('¿Está seguro de que desea crear esta reserva?')) {
+        return
+      }
+
       programarCirugia.mutate({
         solicitudId: solicitudProgramando.id,
         formData: formProgramacion,
@@ -958,89 +1039,113 @@ export default function Solicitudes() {
                         <span>El doctor solicitó reagendamiento ({format(new Date(solicitud.reagendamiento_notificado_at), 'dd/MM/yyyy HH:mm')})</span>
                       </div>
                     )}
+                    
+                    {/* Acciones compactas alineadas al ancho del texto */}
+                    <div className="mt-3 grid grid-flow-col auto-cols-max gap-2 sm:gap-3 items-center justify-start">
+                      {/* Ver Detalles */}
+                      <button
+                        onClick={() => setSolicitudDetalle(solicitud)}
+                        className={`px-3 py-2 rounded-full transition-all border touch-manipulation active:scale-95 inline-flex items-center justify-center ${
+                          theme === 'dark'
+                            ? 'text-blue-400 hover:bg-blue-900/30 border-blue-800 hover:border-blue-600'
+                            : theme === 'medical'
+                            ? 'text-blue-600 hover:bg-blue-50 border-blue-100 hover:border-blue-300'
+                            : 'text-blue-600 hover:bg-blue-50 border-blue-100 hover:border-blue-300'
+                        }`}
+                        title="Ver detalles"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      
+                      {/* Estado: aceptada con reagendamiento */}
+                      {solicitud.estado === 'aceptada' && solicitud.reagendamiento_notificado_at && (
+                        <>
+                          {tieneHorarioPreferido(solicitud) && (
+                            <button
+                              onClick={() => handleAceptarHorarioMedico(solicitud)}
+                              disabled={programarConHorarioDelMedico.isPending || reagendarConHorarioDelMedico.isPending}
+                              className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-[0.15em] shadow-md active:scale-95 transition-all inline-flex items-center justify-center gap-2"
+                              title="Aceptar horario propuesto por el médico"
+                            >
+                              {reagendarConHorarioDelMedico.isPending && solicitudAceptandoHorario?.id === solicitud.id ? (
+                                <>
+                                  <LoadingSpinner size="sm" />
+                                  Aceptando...
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle className="w-4 h-4" />
+                                  ACEPTAR HORARIO MÉDICO
+                                </>
+                              )}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleReagendar(solicitud)}
+                            className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-[0.15em] shadow-md active:scale-95 transition-all inline-flex items-center justify-center gap-2"
+                            title="Cambiar fecha/hora de la cirugía"
+                          >
+                            <CalendarClock className="w-4 h-4" />
+                            REAGENDAR
+                          </button>
+                        </>
+                      )}
+                      
+                      {/* Estado: pendiente */}
+                      {solicitud.estado === 'pendiente' && (
+                        <>
+                          {tieneHorarioPreferido(solicitud) && (
+                            <button
+                              onClick={() => handleAceptarHorarioMedico(solicitud)}
+                              disabled={programarConHorarioDelMedico.isPending || reagendarConHorarioDelMedico.isPending}
+                              className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-[0.15em] shadow-md active:scale-95 transition-all inline-flex items-center justify-center gap-2"
+                            >
+                              {programarConHorarioDelMedico.isPending && solicitudAceptandoHorario?.id === solicitud.id ? (
+                                <>
+                                  <LoadingSpinner size="sm" />
+                                  Aceptando...
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle className="w-4 h-4" />
+                                  ACEPTAR HORARIO MÉDICO
+                                </>
+                              )}
+                            </button>
+                          )}
+                          {tieneHorarioPreferido(solicitud) && (
+                            <button
+                              onClick={() => handleEnviarAvisoReagendacion(solicitud)}
+                              className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-[0.15em] shadow-md active:scale-95 transition-all inline-flex items-center justify-center gap-2"
+                              title="Enviar aviso al médico para nueva propuesta de horario"
+                            >
+                              <CalendarClock className="w-4 h-4" />
+                              ENVIAR AVISO DE REAGENDACIÓN
+                            </button>
+                          )}
+                          {!solicitud.dejar_fecha_a_pabellon && (
+                            <button
+                              onClick={() => handleAceptarYProgramar(solicitud)}
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-[0.15em] shadow-md active:scale-95 transition-all inline-flex items-center justify-center"
+                            >
+                              GESTIONAR CUPO
+                            </button>
+                          )}
+                          {solicitud.dejar_fecha_a_pabellon && (
+                            <button
+                              onClick={() => handleGestionarHora(solicitud)}
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-[0.15em] shadow-md active:scale-95 transition-all inline-flex items-center justify-center"
+                              title="Abrir calendario diario para elegir horario"
+                            >
+                              GESTIONAR HORA
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Lado derecho: Botones */}
-                  <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-center sm:justify-end">
-                    {/* Botón Ver Detalles */}
-                    <button
-                      onClick={() => setSolicitudDetalle(solicitud)}
-                      className={`p-2.5 sm:p-3 rounded-lg sm:rounded-xl transition-all border touch-manipulation active:scale-95 ${
-                        theme === 'dark'
-                          ? 'text-blue-400 hover:bg-blue-900/30 border-blue-800 hover:border-blue-600'
-                          : theme === 'medical'
-                          ? 'text-blue-600 hover:bg-blue-50 border-blue-100 hover:border-blue-300'
-                          : 'text-blue-600 hover:bg-blue-50 border-blue-100 hover:border-blue-300'
-                      }`}
-                      title="Ver detalles"
-                    >
-                      <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </button>
-                    
-                    {/* Botón Reagendar: cuando el doctor pidió reagendamiento y la solicitud ya está aceptada/programada */}
-                    {solicitud.estado === 'aceptada' && solicitud.reagendamiento_notificado_at && (
-                      <>
-                        {tieneHorarioPreferido(solicitud) && (
-                          <button
-                            onClick={() => handleAceptarHorarioMedico(solicitud)}
-                            disabled={programarConHorarioDelMedico.isPending || reagendarConHorarioDelMedico.isPending}
-                            className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-4 sm:px-5 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-black text-[9px] sm:text-[10px] uppercase tracking-[0.15em] shadow-lg active:scale-95 transition-all touch-manipulation flex items-center gap-2"
-                            title="Aceptar horario propuesto por el médico"
-                          >
-                            {reagendarConHorarioDelMedico.isPending && solicitudAceptandoHorario?.id === solicitud.id ? (
-                              <>
-                                <LoadingSpinner size="sm" />
-                                Aceptando horario...
-                              </>
-                            ) : (
-                              <>
-                                <CheckCircle className="w-4 h-4" />
-                                ACEPTAR HORARIO MÉDICO
-                              </>
-                            )}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleReagendar(solicitud)}
-                          className="bg-amber-500 hover:bg-amber-600 text-white px-4 sm:px-5 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-black text-[9px] sm:text-[10px] uppercase tracking-[0.15em] shadow-lg active:scale-95 transition-all touch-manipulation flex items-center gap-2"
-                          title="Cambiar fecha/hora de la cirugía"
-                        >
-                          <CalendarClock className="w-4 h-4" />
-                          REAGENDAR
-                        </button>
-                      </>
-                    )}
-                    {/* Botones de gestión de cupo */}
-                    {solicitud.estado === 'pendiente' && (
-                      <>
-                        {tieneHorarioPreferido(solicitud) && (
-                          <button
-                            onClick={() => handleAceptarHorarioMedico(solicitud)}
-                            disabled={programarConHorarioDelMedico.isPending || reagendarConHorarioDelMedico.isPending}
-                            className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-4 sm:px-5 lg:px-6 py-2.5 sm:py-3 lg:py-3.5 rounded-lg sm:rounded-xl font-black text-[9px] sm:text-[10px] uppercase tracking-[0.15em] shadow-lg active:scale-95 transition-all touch-manipulation flex-1 sm:flex-initial flex items-center justify-center gap-2"
-                          >
-                            {programarConHorarioDelMedico.isPending && solicitudAceptandoHorario?.id === solicitud.id ? (
-                              <>
-                                <LoadingSpinner size="sm" />
-                                Aceptando horario...
-                              </>
-                            ) : (
-                              <>
-                                <CheckCircle className="w-4 h-4" />
-                                ACEPTAR HORARIO MÉDICO
-                              </>
-                            )}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleAceptarYProgramar(solicitud)}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 lg:px-8 py-2.5 sm:py-3 lg:py-3.5 rounded-lg sm:rounded-xl font-black text-[9px] sm:text-[10px] uppercase tracking-[0.15em] shadow-lg active:scale-95 transition-all touch-manipulation flex-1 sm:flex-initial"
-                        >
-                          GESTIONAR CUPO
-                        </button>
-                      </>
-                    )}
-                  </div>
+                  
                 </div>
               )
             })
@@ -1313,8 +1418,8 @@ export default function Solicitudes() {
             </div>
 
             <form onSubmit={handleProgramar} className="p-8 space-y-8 overflow-y-auto custom-scrollbar flex-1">
-              {/* Campos de fecha y hora - Estilo Gemini */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* Campo de fecha - la hora se selecciona desde los bloques de pabellón */}
+              <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Fecha *</label>
                   <input
@@ -1325,21 +1430,6 @@ export default function Solicitudes() {
                     required
                     min={format(new Date(), 'yyyy-MM-dd')}
                   />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Hora Fin *</label>
-                  <select
-                    value={formProgramacion.hora_fin ? String(formProgramacion.hora_fin).slice(0, 5) : ''}
-                    onChange={(e) => setFormProgramacion({ ...formProgramacion, hora_fin: sanitizeString(e.target.value) })}
-                    className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl py-3.5 px-5 focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-slate-700"
-                    required
-                  >
-                    <option value="">Seleccione hora</option>
-                    {HORAS_SELECT.filter(h => !formProgramacion.hora_inicio || h > String(formProgramacion.hora_inicio).slice(0, 5)).map(h => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
-                  <p className="text-[10px] text-slate-500 ml-1">Solo hora (sin minutos)</p>
                 </div>
               </div>
 
@@ -1480,7 +1570,7 @@ export default function Solicitudes() {
                               }
                               
                               const { status, data } = getSlotStatus(pav.id, time)
-                              const isSelected = formProgramacion.operating_room_id === pav.id && horaSeleccionada
+                              const isSelected = seleccionBloques.pabellonId === pav.id && seleccionBloques.times.includes(time)
                               const isOccupied = status === 'occupied' || status === 'blocked'
                               
                               return (
@@ -1495,10 +1585,49 @@ export default function Solicitudes() {
                                       }
                                       return
                                     }
-                                    setFormProgramacion({ 
-                                      ...formProgramacion, 
+                                    if (seleccionBloques.pabellonId && seleccionBloques.pabellonId !== pav.id) {
+                                      // Cambiar de pabellón: iniciar nueva selección
+                                      const nueva = { pabellonId: pav.id, times: [time] }
+                                      setSeleccionBloques(nueva)
+                                      setFormProgramacion({
+                                        ...formProgramacion,
+                                        operating_room_id: pav.id,
+                                        hora_inicio: time,
+                                        hora_fin: `${String(parseInt(time.split(':')[0]) + 1).padStart(2, '0')}:${time.split(':')[1] || '00'}`
+                                      })
+                                      return
+                                    }
+                                    // Toggle del bloque dentro del mismo pabellón
+                                    const exists = seleccionBloques.times.includes(time)
+                                    const nextTimes = exists
+                                      ? seleccionBloques.times.filter(t => t !== time)
+                                      : [...seleccionBloques.times, time]
+                                    if (nextTimes.length === 0) {
+                                      setSeleccionBloques({ pabellonId: null, times: [] })
+                                      setFormProgramacion({
+                                        ...formProgramacion,
+                                        operating_room_id: '',
+                                        hora_inicio: '',
+                                        hora_fin: ''
+                                      })
+                                      return
+                                    }
+                                    // Validar contigüidad
+                                    if (!areContiguous(nextTimes)) {
+                                      showError('Debes seleccionar bloques consecutivos en el mismo pabellón')
+                                      return
+                                    }
+                                    const ordered = sortTimesAsc(nextTimes)
+                                    const start = ordered[0]
+                                    const endHour = parseInt(ordered[ordered.length - 1].split(':')[0]) + 1
+                                    const endMin = ordered[ordered.length - 1].split(':')[1] || '00'
+                                    const end = `${String(endHour).padStart(2, '0')}:${endMin}`
+                                    setSeleccionBloques({ pabellonId: pav.id, times: ordered })
+                                    setFormProgramacion({
+                                      ...formProgramacion,
                                       operating_room_id: pav.id,
-                                      hora_inicio: time
+                                      hora_inicio: start,
+                                      hora_fin: end
                                     })
                                   }}
                                   className={`flex-1 min-h-[110px] border-r last:border-r-0 p-2.5 transition-all ${
@@ -1542,7 +1671,7 @@ export default function Solicitudes() {
 
                     
                     {/* Footer flotante cuando hay selección */}
-                    {formProgramacion.operating_room_id && formProgramacion.hora_inicio && (
+                    {seleccionBloques.times.length > 0 && (
                       <div className="absolute bottom-0 left-0 right-0 bg-slate-900 text-white p-6 flex items-center justify-between animate-in slide-in-from-bottom-full duration-300 shadow-[0_-10px_40px_rgba(0,0,0,0.2)]">
                         <div className="flex items-center gap-6">
                           <div className="bg-blue-600 p-4 rounded-2xl">
@@ -1553,27 +1682,28 @@ export default function Solicitudes() {
                               Bloque Seleccionado
                             </div>
                             <div className="font-black text-xl uppercase tracking-tighter">
-                              {pabellonesMostrar.find(p => p.id === formProgramacion.operating_room_id)?.nombre || 'Pabellón'} 
+                              {pabellonesMostrar.find(p => p.id === seleccionBloques.pabellonId)?.nombre || 'Pabellón'} 
                               <span className="text-slate-600 mx-3">•</span> 
-                              {formProgramacion.hora_inicio}
+                              {formProgramacion.hora_inicio} – {formProgramacion.hora_fin}
                             </div>
                           </div>
                         </div>
                         <button
                           type="button"
                           onClick={() => {
-                            const pabellon = pabellonesMostrar.find(p => p.id === formProgramacion.operating_room_id)
-                            if (pabellon && formProgramacion.hora_inicio) {
-                              // Calcular hora fin (asumiendo 1 hora por defecto)
-                              const [hours, minutes] = formProgramacion.hora_inicio.split(':')
-                              const horaFin = new Date()
-                              horaFin.setHours(parseInt(hours) + 1, parseInt(minutes))
-                              const horaFinStr = `${horaFin.getHours().toString().padStart(2, '0')}:${horaFin.getMinutes().toString().padStart(2, '0')}`
-                              
-                              setFormProgramacion(prev => ({
-                                ...prev,
-                                hora_fin: horaFinStr
-                              }))
+                            const pabellon = pabellonesMostrar.find(p => p.id === seleccionBloques.pabellonId)
+                            if (pabellon && seleccionBloques.times.length > 0) {
+                              const start = formProgramacion.hora_inicio
+                              const end = formProgramacion.hora_fin
+                              setConfirmAgendamientoData({
+                                fecha: formProgramacion.fecha,
+                                hora_inicio: start,
+                                hora_fin: end,
+                                operating_room_id: seleccionBloques.pabellonId,
+                                pabellonNombre: pabellon.nombre,
+                                observaciones: formProgramacion.observaciones
+                              })
+                              setShowConfirmAgendamiento(true)
                             }
                           }}
                           className="bg-blue-500 hover:bg-blue-400 text-white px-12 py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all"
@@ -1586,49 +1716,7 @@ export default function Solicitudes() {
                 </div>
               )}
 
-              {/* Select de Pabellón - Estilo Gemini (solo si no se seleccionó desde el calendario) */}
-              {!formProgramacion.operating_room_id && (
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                    Seleccionar Pabellón Manualmente *
-                  </label>
-                  <select
-                    value={formProgramacion.operating_room_id}
-                    onChange={(e) => setFormProgramacion({ ...formProgramacion, operating_room_id: sanitizeString(e.target.value) })}
-                    className="w-full bg-slate-50 border-2 border-slate-50 rounded-2xl py-3.5 px-5 focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-slate-700"
-                    required
-                  >
-                    <option value="">-- Seleccionar Pabellón --</option>
-                    {pabellones.map(pabellon => {
-                      // Verificar si está ocupado en la hora seleccionada
-                      let estaOcupado = false
-                      if (formProgramacion.fecha && formProgramacion.hora_inicio) {
-                        const cirugiaOcupada = cirugiasFecha.find(c => 
-                          c.operating_room_id === pabellon.id &&
-                          c.hora_inicio <= formProgramacion.hora_inicio + ':00' && 
-                          c.hora_fin > formProgramacion.hora_inicio + ':00'
-                        )
-                        const bloqueo = bloqueosFecha.find(b => 
-                          b.operating_room_id === pabellon.id &&
-                          b.hora_inicio <= formProgramacion.hora_inicio + ':00' && 
-                          b.hora_fin > formProgramacion.hora_inicio + ':00'
-                        )
-                        estaOcupado = !!cirugiaOcupada || !!bloqueo
-                      }
-                      
-                      return (
-                        <option 
-                          key={pabellon.id} 
-                          value={pabellon.id}
-                          disabled={estaOcupado}
-                        >
-                          {pabellon.nombre} {estaOcupado ? '(Ocupado)' : ''}
-                        </option>
-                      )
-                    })}
-                  </select>
-                </div>
-              )}
+              {/* Selector manual de pabellón removido: la selección se realiza desde la grilla de bloques */}
 
               {/* Campo de Observaciones - Estilo Gemini */}
               <div className="space-y-2">
@@ -1732,6 +1820,108 @@ export default function Solicitudes() {
           </div>
         )}
       </Modal>
+
+      {showConfirmAgendamiento && confirmAgendamientoData && solicitudProgramando && (
+        <Modal
+          isOpen={showConfirmAgendamiento}
+          onClose={() => {
+            setShowConfirmAgendamiento(false)
+            setConfirmAgendamientoData(null)
+          }}
+          title="Confirmar Agendamiento"
+        >
+          <div className="space-y-5">
+            <div className="flex items-start gap-3">
+              <Activity className="w-5 h-5 text-blue-600" />
+              <div className="flex-1">
+                <p className="text-sm font-bold text-slate-900">Revise los detalles antes de confirmar.</p>
+                <div className="mt-2 text-xs text-slate-700 space-y-1">
+                  <p><span className="font-bold">Paciente:</span> {solicitudProgramando.patients?.nombre} {solicitudProgramando.patients?.apellido}</p>
+                  <p><span className="font-bold">Doctor:</span> Dr. {solicitudProgramando.doctors?.apellido || solicitudProgramando.doctors?.nombre}</p>
+                  <p><span className="font-bold">Fecha:</span> {format(new Date(confirmAgendamientoData.fecha), 'dd/MM/yyyy')}</p>
+                  <p><span className="font-bold">Pabellón:</span> {confirmAgendamientoData.pabellonNombre}</p>
+                  <p><span className="font-bold">Horario:</span> {String(confirmAgendamientoData.hora_inicio).slice(0, 5)} - {String(confirmAgendamientoData.hora_fin).slice(0, 5)}</p>
+                  {confirmAgendamientoData.observaciones ? (
+                    <p><span className="font-bold">Observaciones:</span> {confirmAgendamientoData.observaciones}</p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+            <div className="border rounded-xl p-3">
+              <div className="grid grid-cols-4 gap-2">
+                {slotsHorarios.map((t) => {
+                  const { status } = getSlotStatus(confirmAgendamientoData.operating_room_id, t)
+                  const isSel =
+                    timeToMinutes(t) >= timeToMinutes(confirmAgendamientoData.hora_inicio) &&
+                    timeToMinutes(t) < timeToMinutes(confirmAgendamientoData.hora_fin)
+                  return (
+                    <div
+                      key={t}
+                      className={`text-center text-[10px] font-bold px-2 py-1 rounded ${
+                        isSel
+                          ? 'bg-blue-600 text-white'
+                          : status === 'occupied'
+                          ? 'bg-red-100 text-red-700'
+                          : status === 'blocked'
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {t}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="flex justify-end gap-4">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowConfirmAgendamiento(false)
+                  setConfirmAgendamientoData(null)
+                }}
+                disabled={programarCirugia.isPending}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={() => {
+                  // Confirmación adicional
+                  if (!window.confirm('¿Está seguro de que desea crear esta reserva?')) {
+                    return
+                  }
+                  
+                  const payload = {
+                    solicitudId: solicitudProgramando.id,
+                    formData: {
+                      fecha: confirmAgendamientoData.fecha,
+                      hora_inicio: confirmAgendamientoData.hora_inicio,
+                      hora_fin: confirmAgendamientoData.hora_fin,
+                      operating_room_id: confirmAgendamientoData.operating_room_id,
+                      observaciones: confirmAgendamientoData.observaciones || null,
+                    },
+                  }
+                  try {
+                    sessionStorage.setItem('highlight_slot', JSON.stringify({
+                      date: confirmAgendamientoData.fecha,
+                      time: confirmAgendamientoData.hora_inicio,
+                      pabellonId: confirmAgendamientoData.operating_room_id,
+                    }))
+                  } catch {}
+                  programarCirugia.mutate(payload)
+                  setShowConfirmAgendamiento(false)
+                  setConfirmAgendamientoData(null)
+                }}
+                loading={programarCirugia.isPending}
+                disabled={programarCirugia.isPending}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                Confirmar Agendamiento
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
