@@ -1,30 +1,31 @@
 import { memo } from 'react'
 import { motion } from 'framer-motion'
 import { useTheme } from '../../contexts/ThemeContext'
+import { tc } from '../../constants/theme'
 
+/**
+ * Tarjeta con animación de entrada y soporte multi-tema.
+ * @param {React.ReactNode} children - Contenido de la tarjeta
+ * @param {string} [className=''] - Clases CSS adicionales
+ * @param {boolean} [hover=true] - Activa el efecto de elevación al pasar el cursor
+ */
 function Card({ children, className = '', hover = true, ...props }) {
   const { theme } = useTheme()
-  
-  const getCardClasses = () => {
-    const baseClasses = 'rounded-xl sm:rounded-2xl lg:rounded-[2.5rem] p-4 sm:p-6 lg:p-8'
-    
-    if (theme === 'dark') {
-      return `${baseClasses} bg-slate-800 border-slate-700 shadow-lg ${className}`
-    } else if (theme === 'medical') {
-      return `${baseClasses} bg-white border-blue-100 shadow-sm ${className}`
-    } else {
-      // Tema claro: tarjetas blancas con sombra más pronunciada para destacar sobre fondo gris
-      return `${baseClasses} bg-white border-slate-200 shadow-md hover:shadow-lg transition-shadow ${className}`
-    }
-  }
-  
+  const t = tc(theme)
+
+  const borderClass = theme === 'dark'
+    ? 'border border-slate-700 shadow-lg'
+    : theme === 'medical'
+      ? 'border border-blue-100 shadow-sm'
+      : 'border border-slate-200 shadow-md hover:shadow-lg transition-shadow'
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
       whileHover={hover ? { y: -4, transition: { duration: 0.2 } } : {}}
-      className={getCardClasses()}
+      className={`rounded-xl sm:rounded-2xl lg:rounded-[2.5rem] p-4 sm:p-6 lg:p-8 ${t.cardBg} ${borderClass} ${className}`}
       {...props}
     >
       {children}

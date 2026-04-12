@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-r
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { supabase } from '../config/supabase'
+import { useCurrentUserId } from '../hooks/useCurrentUserId'
 import { 
   LayoutDashboard,
   FileText,
@@ -26,7 +27,7 @@ import {
   Mail
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import Dashboard from '../pages/pabellon/Dashboard'
+import Dashboard from '../pages/pabellon/dashboard'
 import Solicitudes from '../pages/pabellon/Solicitudes'
 import Calendario from '../pages/pabellon/Calendario'
 import BloqueoHorario from '../pages/pabellon/BloqueoHorario'
@@ -56,8 +57,8 @@ export default function PabellonLayout() {
   const navigate = useNavigate()
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const [userId, setUserId] = useState(null)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const userId = useCurrentUserId()
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false)
   const notificationsDropdownRef = useRef(null)
   const { theme, themes, changeTheme } = useTheme()
@@ -74,20 +75,6 @@ export default function PabellonLayout() {
     }
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showNotificationsDropdown])
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setUserId(user.id)
-      }
-    })
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setUserId(session?.user?.id || null)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
 
   // Activar notificaciones en tiempo real
   useRealtimeNotifications(userId)

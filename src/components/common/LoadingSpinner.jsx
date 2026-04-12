@@ -1,5 +1,10 @@
 import { memo } from 'react'
 
+/**
+ * Spinner de carga accesible con tres tamaños.
+ * @param {'sm'|'md'|'lg'} [size='md'] - Tamaño del spinner
+ * @param {string} [className=''] - Clases CSS adicionales para posicionamiento
+ */
 function LoadingSpinner({ size = 'md', className = '' }) {
   const sizeClasses = {
     sm: 'h-4 w-4 border-b',
@@ -10,7 +15,13 @@ function LoadingSpinner({ size = 'md', className = '' }) {
   const sizeClass = sizeClasses[size] || sizeClasses.md
   
   return (
-    <div className={`animate-spin rounded-full ${sizeClass} border-blue-600 ${className}`}>    </div>
+    <div
+      role="status"
+      aria-label="Cargando..."
+      className={`animate-spin rounded-full ${sizeClass} border-blue-600 ${className}`}
+    >
+      <span className="sr-only">Cargando...</span>
+    </div>
   )
 }
 

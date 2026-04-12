@@ -4,6 +4,7 @@ import { Calendar, FileText, CheckCircle2, Clock } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useTheme } from '../../contexts/ThemeContext'
+import { MetricSkeleton, CardSkeleton } from '../../components/common/Skeleton'
 
 export default function Dashboard() {
   const { theme } = useTheme()
@@ -143,7 +144,15 @@ export default function Dashboard() {
   })
 
   if (loadingDoctor) {
-    return <div className="text-center py-8">Cargando...</div>
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => <MetricSkeleton key={i} />)}
+        </div>
+        <CardSkeleton />
+        <CardSkeleton />
+      </div>
+    )
   }
   if (errorDoctor || !doctor) {
     return (

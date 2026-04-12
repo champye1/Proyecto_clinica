@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '../config/supabase'
+import { countUnread } from '../services/notificationService'
 import { logger } from '../utils/logger'
 
 /**
@@ -11,23 +11,15 @@ export function useUnreadNotifications(userId) {
     queryKey: ['unread-notifications-count', userId],
     queryFn: async () => {
       if (!userId) return 0
-
-      const { count, error } = await supabase
-        .from('notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .eq('vista', false)
-        .is('deleted_at', null)
-
+      const { count: total, error } = await countUnread(userId)
       if (error) {
         logger.errorWithContext('Error al obtener notificaciones no leídas', error)
         return 0
       }
-
-      return count || 0
+      return total
     },
     enabled: !!userId,
-    refetchInterval: 30000, // Refrescar cada 30 segundos
+    refetchInterval: 30000,
   })
 
   return { count, isLoading }

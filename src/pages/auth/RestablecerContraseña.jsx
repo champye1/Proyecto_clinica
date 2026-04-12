@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { supabase } from '../../config/supabase'
 import { Lock, Stethoscope, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import { sanitizePassword } from '../../utils/sanitizeInput'
+import { getCurrentSession, updatePassword, signOut } from '../../services/authService'
 
 export default function RestablecerContraseña() {
   const [password, setPassword] = useState('')
@@ -22,14 +22,8 @@ export default function RestablecerContraseña() {
       return
     }
 
-    // Supabase pone access_token y type=recovery en el hash; el cliente recupera la sesión al hacer getSession
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setLinkStatus('valid')
-      } else {
-        // Si no hay sesión tras procesar el hash, puede ser enlace expirado
-        setLinkStatus('expired')
-      }
+    getCurrentSession().then(({ session }) => {
+      setLinkStatus(session ? 'valid' : 'expired')
     })
   }, [])
 
@@ -46,14 +40,12 @@ export default function RestablecerContraseña() {
     }
     setLoading(true)
     try {
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: sanitizePassword(password),
-      })
+      const { error: updateError } = await updatePassword(sanitizePassword(password))
       if (updateError) {
         setError(updateError.message || 'Error al actualizar la contraseña.')
         return
       }
-      await supabase.auth.signOut()
+      await signOut()
       navigate('/login/doctor', { replace: true })
       window.location.reload()
     } catch (err) {
@@ -143,12 +135,14 @@ export default function RestablecerContraseña() {
                 placeholder="••••••••"
                 minLength={6}
                 disabled={loading}
+                autoComplete="new-password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
-                title={showPassword ? 'Ocultar' : 'Ver'}
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                tabIndex={-1}
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
@@ -169,6 +163,7 @@ export default function RestablecerContraseña() {
                 placeholder="••••••••"
                 minLength={6}
                 disabled={loading}
+                autoComplete="new-password"
               />
             </div>
           </div>

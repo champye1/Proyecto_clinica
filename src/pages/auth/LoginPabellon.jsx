@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../../config/supabase'
-import { Mail, Lock, AlertCircle, Building2, ArrowLeft, Stethoscope } from 'lucide-react'
+import { Mail, Lock, AlertCircle, Building2, ArrowLeft } from 'lucide-react'
 import { sanitizeEmail, sanitizePassword } from '../../utils/sanitizeInput'
-import { 
-  isLocked, 
-  recordFailedAttempt, 
-  clearLoginAttempts, 
-  formatRemainingTime 
+import {
+  isLocked,
+  recordFailedAttempt,
+  clearLoginAttempts,
+  formatRemainingTime,
 } from '../../utils/rateLimiter'
+import { signIn, verifyUserExists, signOut } from '../../services/authService'
 
 export default function LoginPabellon() {
   const [email, setEmail] = useState('')
@@ -18,15 +18,11 @@ export default function LoginPabellon() {
   const [lockoutInfo, setLockoutInfo] = useState(null)
   const navigate = useNavigate()
 
-  // Verificar bloqueo al cambiar el email
   useEffect(() => {
     if (email) {
       const lockStatus = isLocked(email)
       if (lockStatus.isLocked) {
-        setLockoutInfo({
-          isLocked: true,
-          remainingTime: formatRemainingTime(lockStatus.remainingTime),
-        })
+        setLockoutInfo({ isLocked: true, remainingTime: formatRemainingTime(lockStatus.remainingTime) })
       } else {
         setLockoutInfo(null)
       }
@@ -41,7 +37,6 @@ export default function LoginPabellon() {
     setError(null)
 
     try {
-      // Verificar si está bloqueado
       const lockStatus = isLocked(email)
       if (lockStatus.isLocked) {
         setError(`Demasiados intentos fallidos. Intenta nuevamente en ${formatRemainingTime(lockStatus.remainingTime)}.`)
@@ -49,17 +44,12 @@ export default function LoginPabellon() {
         return
       }
 
-      // Marcar que estamos validando para prevenir redirecciones automáticas
       sessionStorage.setItem('validating_login', 'true')
 
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+      const { data, error: authError } = await signIn(email, password)
 
       if (authError) {
         sessionStorage.removeItem('validating_login')
-        // Registrar intento fallido
         const attemptResult = recordFailedAttempt(email)
         if (attemptResult.isLocked) {
           throw new Error(`Demasiados intentos fallidos. Tu cuenta ha sido bloqueada por ${formatRemainingTime(Math.ceil((attemptResult.lockoutTime - Date.now()) / 1000))}.`)
@@ -69,49 +59,38 @@ export default function LoginPabellon() {
         }
       }
 
-      // Verificar que el usuario sea Pabellón
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', data.user.id)
-        .maybeSingle()
+      const { userData, error: userError } = await verifyUserExists(data.user.id)
 
-      if (userError && userError.code !== 'PGRST116') {
+      if (userError) {
         sessionStorage.removeItem('validating_login')
         throw userError
       }
 
       if (!userData) {
         sessionStorage.removeItem('validating_login')
-        await supabase.auth.signOut()
+        await signOut()
         throw new Error('Usuario no encontrado en el sistema. Contacte al administrador.')
       }
 
-      // Si el usuario es Doctor, mostrar error y cerrar sesión
       if (userData.role === 'doctor') {
         setError('Tienes que ingresar como Doctor')
         setLoading(false)
-        // Cerrar sesión después de mostrar el error
         setTimeout(async () => {
-          await supabase.auth.signOut()
+          await signOut()
           sessionStorage.removeItem('validating_login')
         }, 100)
         return
       }
 
-      // Si todo está bien, limpiar el flag y los intentos fallidos
       sessionStorage.removeItem('validating_login')
       clearLoginAttempts(email)
 
       if (userData.role !== 'pabellon') {
-        await supabase.auth.signOut()
+        await signOut()
         throw new Error('Este acceso es solo para usuarios de Pabellón')
       }
 
-      // Esperar un momento para que App.jsx detecte el cambio de autenticación
       await new Promise(resolve => setTimeout(resolve, 100))
-      
-      // Usar window.location para forzar la navegación completa
       window.location.href = '/pabellon'
     } catch (err) {
       sessionStorage.removeItem('validating_login')
@@ -134,7 +113,7 @@ export default function LoginPabellon() {
 
         <div className="flex justify-center mb-6 sm:mb-8">
           <div className="bg-blue-600 p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-xl shadow-blue-200 rotate-6">
-              <Building2 className="text-white w-6 h-6 sm:w-8 sm:h-8" />
+            <Building2 className="text-white w-6 h-6 sm:w-8 sm:h-8" />
           </div>
         </div>
         <div className="text-center mb-8 sm:mb-10">
@@ -144,7 +123,7 @@ export default function LoginPabellon() {
 
         <form onSubmit={handleLogin} className="space-y-4 sm:space-y-6">
           {lockoutInfo?.isLocked && (
-            <div className="bg-orange-50 border-2 border-orange-200 text-orange-700 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl flex items-center gap-2 animate-in fade-in duration-300">
+            <div className="bg-orange-50 border-2 border-orange-200 text-orange-700 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl flex items-center gap-2 animate-in fade-in duration-300" role="alert">
               <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
               <span className="text-[10px] sm:text-xs font-bold break-words">
                 Cuenta bloqueada. Intenta nuevamente en {lockoutInfo.remainingTime}.
@@ -153,20 +132,18 @@ export default function LoginPabellon() {
           )}
 
           {error && (
-            <div className="bg-red-50 border-2 border-red-200 text-red-700 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl flex items-center gap-2 animate-in fade-in duration-300">
+            <div className="bg-red-50 border-2 border-red-200 text-red-700 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl flex items-center gap-2 animate-in fade-in duration-300" role="alert">
               <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-              <span className="text-[10px] sm:text-xs font-bold break-words">
-                {error === 'ROLE_MISMATCH_DOCTOR' 
-                  ? 'Tienes que ingresar como Doctor' 
-                  : error}
-              </span>
+              <span className="text-[10px] sm:text-xs font-bold break-words">{error}</span>
             </div>
           )}
 
           <div className="space-y-1.5 sm:space-y-2">
-            <label htmlFor="email" className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Usuario</label>
+            <label htmlFor="email" className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+              Usuario
+            </label>
             <div className="relative">
-              <Mail className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4 sm:w-[18px] sm:h-[18px]" />
+              <Mail className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4 sm:w-[18px] sm:h-[18px]" aria-hidden="true" />
               <input
                 id="email"
                 type="email"
@@ -176,14 +153,17 @@ export default function LoginPabellon() {
                 placeholder="pabellon@clinica.cl"
                 required
                 disabled={loading}
+                autoComplete="email"
               />
             </div>
           </div>
 
           <div className="space-y-1.5 sm:space-y-2">
-            <label htmlFor="password" className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Contraseña</label>
+            <label htmlFor="password" className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+              Contraseña
+            </label>
             <div className="relative">
-              <Lock className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4 sm:w-[18px] sm:h-[18px]" />
+              <Lock className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4 sm:w-[18px] sm:h-[18px]" aria-hidden="true" />
               <input
                 id="password"
                 type="password"
@@ -193,6 +173,7 @@ export default function LoginPabellon() {
                 placeholder="••••••••"
                 required
                 disabled={loading}
+                autoComplete="current-password"
               />
             </div>
           </div>
@@ -200,6 +181,8 @@ export default function LoginPabellon() {
           <button
             type="submit"
             disabled={loading || lockoutInfo?.isLocked}
+            aria-busy={loading}
+            aria-disabled={loading || lockoutInfo?.isLocked}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 sm:py-4 rounded-xl sm:rounded-2xl font-black text-xs sm:text-sm uppercase tracking-[0.2em] shadow-xl shadow-blue-200 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
           >
             {loading ? 'Iniciando sesión...' : lockoutInfo?.isLocked ? 'Cuenta Bloqueada' : 'Entrar al Sistema'}

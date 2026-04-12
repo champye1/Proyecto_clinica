@@ -1,11 +1,12 @@
 import { Component } from 'react'
 import { AlertTriangle } from 'lucide-react'
+import * as Sentry from '@sentry/react'
 import { logger } from '../../utils/logger'
 
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props)
-    this.state = { hasError: false, error: null, errorInfo: null }
+    this.state = { hasError: false, error: null, errorInfo: null, eventId: null }
   }
 
   static getDerivedStateFromError(error) {
@@ -16,15 +17,20 @@ class ErrorBoundary extends Component {
     logger.errorWithContext('ErrorBoundary capturó un error', error, {
       componentStack: errorInfo.componentStack,
     })
-    
-    this.setState({
-      error,
-      errorInfo,
-    })
+
+    this.setState({ error, errorInfo })
+
+    // Reportar a Sentry si está configurado
+    if (import.meta.env.VITE_SENTRY_DSN) {
+      const eventId = Sentry.captureException(error, {
+        contexts: { react: { componentStack: errorInfo.componentStack } },
+      })
+      this.setState({ eventId })
+    }
   }
 
   handleReset = () => {
-    this.setState({ hasError: false, error: null, errorInfo: null })
+    this.setState({ hasError: false, error: null, errorInfo: null, eventId: null })
     window.location.reload()
   }
 
@@ -42,7 +48,7 @@ class ErrorBoundary extends Component {
                 <p className="text-sm text-slate-500 mt-1">Se produjo un error inesperado</p>
               </div>
             </div>
-            
+
             {import.meta.env.DEV && this.state.error && (
               <div className="mb-6 p-4 bg-slate-100 rounded-lg">
                 <p className="text-xs font-mono text-red-600 break-words">
@@ -50,7 +56,13 @@ class ErrorBoundary extends Component {
                 </p>
               </div>
             )}
-            
+
+            {this.state.eventId && (
+              <p className="text-xs text-slate-400 mb-4">
+                ID de error: {this.state.eventId}
+              </p>
+            )}
+
             <div className="flex gap-3">
               <button
                 onClick={this.handleReset}

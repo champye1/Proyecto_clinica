@@ -1,6 +1,7 @@
 import SkeletonLoader from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 
+/** Placeholder de tarjeta genérica mientras carga contenido largo (texto + CTA). */
 export function CardSkeleton() {
   return (
     <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-8">
@@ -11,6 +12,7 @@ export function CardSkeleton() {
   )
 }
 
+/** Placeholder de tarjeta de métrica KPI (círculo + título + valor). */
 export function MetricSkeleton() {
   return (
     <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-6 flex items-center gap-5">
@@ -23,6 +25,10 @@ export function MetricSkeleton() {
   )
 }
 
+/**
+ * Placeholder de tabla/lista mientras cargan las filas.
+ * @param {number} [rows=5] - Número de filas de placeholder a mostrar
+ */
 export function TableSkeleton({ rows = 5 }) {
   return (
     <div className="space-y-3">

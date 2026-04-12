@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { supabase } from '../../config/supabase'
 import { Mail, Stethoscope, ArrowLeft } from 'lucide-react'
 import { sanitizeEmail } from '../../utils/sanitizeInput'
+import { resolveUsernameToEmail, sendPasswordResetEmail } from '../../services/authService'
 
 export default function RecuperarContraseña() {
   const [emailOrUser, setEmailOrUser] = useState('')
@@ -24,20 +24,15 @@ export default function RecuperarContraseña() {
 
       // Si no es un email, intentar resolver username -> email (doctores)
       if (!emailToUse.includes('@')) {
-        const { data: resolvedEmail, error: rpcError } = await supabase
-          .rpc('get_doctor_email_by_username', { p_username: emailToUse })
-        if (rpcError || !resolvedEmail) {
+        const { email: resolved, error: rpcError } = await resolveUsernameToEmail(emailToUse)
+        if (rpcError || !resolved) {
           setError('No encontramos una cuenta de doctor con ese usuario. Usa tu correo electrónico.')
           return
         }
-        emailToUse = resolvedEmail
+        emailToUse = resolved
       }
 
-      const redirectTo = `${window.location.origin}/restablecer-contrasena`
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(emailToUse, {
-        redirectTo,
-      })
-
+      const { error: resetError } = await sendPasswordResetEmail(emailToUse)
       if (resetError) {
         setError(resetError.message || 'Error al enviar el correo. Intenta de nuevo.')
         return
@@ -125,6 +120,7 @@ export default function RecuperarContraseña() {
                 className="w-full bg-slate-50 border-2 border-slate-50 rounded-xl py-3 pl-10 pr-4 focus:border-green-500 focus:bg-white outline-none font-bold text-sm text-slate-700"
                 placeholder="evenegas o doctor@clinica.cl"
                 disabled={loading}
+                autoComplete="email"
               />
             </div>
           </div>

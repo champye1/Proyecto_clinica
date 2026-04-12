@@ -1,6 +1,12 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
+/**
+ * Tooltip animado con cuatro posiciones de anclaje.
+ * @param {React.ReactNode} children - Elemento que dispara el tooltip al pasar el cursor
+ * @param {string} content - Texto a mostrar en el tooltip
+ * @param {'top'|'bottom'|'left'|'right'} [position='top'] - Posición relativa al elemento
+ */
 export default function Tooltip({ children, content, position = 'top' }) {
   const [isVisible, setIsVisible] = useState(false)
 

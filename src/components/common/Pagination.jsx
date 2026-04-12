@@ -1,6 +1,15 @@
 import { memo } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
+/**
+ * Paginación accesible con landmark nav, aria-current y botones con aria-label.
+ * Retorna null si totalPages <= 1 (no hay nada que paginar).
+ * @param {number} currentPage - Página actual (base 1)
+ * @param {number} totalPages - Total de páginas
+ * @param {(page: number) => void} onPageChange - Callback al cambiar de página
+ * @param {number} itemsPerPage - Ítems por página (para calcular rango mostrado)
+ * @param {number} totalItems - Total de ítems (para mostrar "X - Y de Z")
+ */
 function Pagination({ currentPage, totalPages, onPageChange, itemsPerPage, totalItems }) {
   if (totalPages <= 1) return null
 
@@ -43,7 +52,7 @@ function Pagination({ currentPage, totalPages, onPageChange, itemsPerPage, total
   }
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-gray-200">
+    <nav aria-label="Paginación" className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-gray-200">
       <div className="text-sm text-gray-600">
         Mostrando {startItem} - {endItem} de {totalItems} resultados
       </div>
@@ -91,7 +100,7 @@ function Pagination({ currentPage, totalPages, onPageChange, itemsPerPage, total
           <ChevronRight className="w-5 h-5" />
         </button>
       </div>
-    </div>
+    </nav>
   )
 }
 

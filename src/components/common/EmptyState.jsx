@@ -2,16 +2,24 @@ import { memo } from 'react'
 import { motion } from 'framer-motion'
 import { Inbox } from 'lucide-react'
 
-function EmptyState({ 
-  icon: Icon = Inbox, 
-  title, 
+/**
+ * Estado vacío estándar para listas y tablas sin resultados.
+ * @param {React.ElementType} [icon=Inbox] - Componente de ícono Lucide a mostrar
+ * @param {string} title - Título principal (e.g. "Sin resultados")
+ * @param {string} description - Descripción secundaria
+ * @param {React.ReactNode} [action] - Elemento de acción opcional (e.g. un botón)
+ */
+function EmptyState({
+  icon: Icon = Inbox,
+  title,
   description,
-  action 
+  action,
 }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
+      role="status"
       className="flex flex-col items-center justify-center py-16 px-6"
     >
       <motion.div 

@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { supabase } from '../config/supabase'
+import { useCurrentUserId } from '../hooks/useCurrentUserId'
 import {
   LayoutDashboard,
   UserPlus,
@@ -49,7 +50,7 @@ export default function DoctorLayout() {
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false)
   const notificationsDropdownRef = useRef(null)
-  const [userId, setUserId] = useState(null)
+  const userId = useCurrentUserId()
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -62,16 +63,6 @@ export default function DoctorLayout() {
     }
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showNotificationsDropdown])
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setUserId(user.id)
-    })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setUserId(session?.user?.id || null)
-    })
-    return () => subscription.unsubscribe()
-  }, [])
 
   useRealtimeNotifications(userId)
   const { count: unreadCount } = useUnreadNotifications(userId)

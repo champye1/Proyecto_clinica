@@ -771,7 +771,7 @@ export default function Solicitudes() {
   }
 
   if (isLoading) {
-    return <div className="text-center py-8">Cargando solicitudes...</div>
+    return <TableSkeleton rows={6} />
   }
 
   // Función para obtener el color del círculo según la prioridad o estado

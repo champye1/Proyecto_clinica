@@ -10,6 +10,7 @@ import { sanitizeString, sanitizeNumber } from '../../utils/sanitizeInput'
 import Pagination from '../../components/common/Pagination'
 import Modal from '../../components/common/Modal'
 import Button from '../../components/common/Button'
+import { TableSkeleton } from '../../components/common/Skeleton'
 import SearchableSelect from '../../components/SearchableSelect'
 import { codigosOperaciones, getGrupoFonasaByCodigo, insumoAplicaParaGrupo } from '../../data/codigosOperaciones'
 
@@ -310,7 +311,7 @@ export default function Solicitudes() {
   })
 
   if (isLoading) {
-    return <div className="text-center py-8">Cargando solicitudes...</div>
+    return <TableSkeleton rows={6} />
   }
 
   return (

@@ -1,35 +1,36 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../../config/supabase'
 import { Mail, Lock, AlertCircle, Stethoscope, ArrowLeft, Building2, Eye, EyeOff } from 'lucide-react'
 import { sanitizeEmail, sanitizePassword } from '../../utils/sanitizeInput'
-import { 
-  isLocked, 
-  recordFailedAttempt, 
-  clearLoginAttempts, 
-  formatRemainingTime 
+import {
+  isLocked,
+  recordFailedAttempt,
+  clearLoginAttempts,
+  formatRemainingTime,
 } from '../../utils/rateLimiter'
+import {
+  resolveUsernameToEmail,
+  signIn,
+  verifyUserExists,
+  verifyDoctorAccess,
+  signOut,
+} from '../../services/authService'
 
 export default function LoginDoctor() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  /** 'blocked_account' = aviso por vacaciones o acceso web deshabilitado (mensaje claro para el doctor) */
   const [errorType, setErrorType] = useState(null)
   const [lockoutInfo, setLockoutInfo] = useState(null)
   const [showPassword, setShowPassword] = useState(false)
   const navigate = useNavigate()
 
-  // Verificar bloqueo al cambiar el email
   useEffect(() => {
     if (email) {
       const lockStatus = isLocked(email)
       if (lockStatus.isLocked) {
-        setLockoutInfo({
-          isLocked: true,
-          remainingTime: formatRemainingTime(lockStatus.remainingTime),
-        })
+        setLockoutInfo({ isLocked: true, remainingTime: formatRemainingTime(lockStatus.remainingTime) })
       } else {
         setLockoutInfo(null)
       }
@@ -45,7 +46,6 @@ export default function LoginDoctor() {
     setErrorType(null)
 
     try {
-      // Verificar si está bloqueado (usar el identificador ingresado)
       const lockStatus = isLocked(email)
       if (lockStatus.isLocked) {
         setError(`Demasiados intentos fallidos. Intenta nuevamente en ${formatRemainingTime(lockStatus.remainingTime)}.`)
@@ -53,19 +53,14 @@ export default function LoginDoctor() {
         return
       }
 
-      // Marcar que estamos validando para prevenir redirecciones automáticas
       sessionStorage.setItem('validating_login', 'true')
 
-      // Determinar si el input es un email o un username
       const isEmail = email.includes('@')
       let emailToUse = email.toLowerCase().trim()
 
-      // Si no es un email, resolver username -> email vía RPC (anon no puede leer users por RLS)
       if (!isEmail) {
-        const { data: resolvedEmail, error: rpcError } = await supabase
-          .rpc('get_doctor_email_by_username', { p_username: email.toLowerCase().trim() })
-
-        if (rpcError || resolvedEmail == null || resolvedEmail === '') {
+        const { email: resolved, error: rpcError } = await resolveUsernameToEmail(email.toLowerCase().trim())
+        if (rpcError || !resolved) {
           sessionStorage.removeItem('validating_login')
           const attemptResult = recordFailedAttempt(email)
           if (attemptResult.isLocked) {
@@ -75,18 +70,13 @@ export default function LoginDoctor() {
             throw new Error(`Usuario o contraseña incorrectos. ${remaining > 0 ? `Te quedan ${remaining} intento${remaining !== 1 ? 's' : ''}.` : ''}`)
           }
         }
-
-        emailToUse = resolvedEmail
+        emailToUse = resolved
       }
 
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: emailToUse,
-        password,
-      })
+      const { data, error: authError } = await signIn(emailToUse, password)
 
       if (authError) {
         sessionStorage.removeItem('validating_login')
-        // Registrar intento fallido usando el identificador ingresado
         const attemptResult = recordFailedAttempt(email)
         if (attemptResult.isLocked) {
           throw new Error(`Demasiados intentos fallidos. Tu cuenta ha sido bloqueada por ${formatRemainingTime(Math.ceil((attemptResult.lockoutTime - Date.now()) / 1000))}.`)
@@ -96,64 +86,45 @@ export default function LoginDoctor() {
         }
       }
 
-      // PRIMERO: Verificar el rol ANTES de que App.jsx pueda redirigir
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', data.user.id)
-        .maybeSingle()
+      const { userData, error: userError } = await verifyUserExists(data.user.id)
 
-      if (userError && userError.code !== 'PGRST116') {
+      if (userError) {
         sessionStorage.removeItem('validating_login')
-        await supabase.auth.signOut()
+        await signOut()
         throw userError
       }
 
       if (!userData) {
         sessionStorage.removeItem('validating_login')
-        await supabase.auth.signOut()
+        await signOut()
         throw new Error('Usuario no encontrado en el sistema. Contacte al administrador.')
       }
 
-      // Si el usuario es Pabellón, mostrar error y cerrar sesión
       if (userData.role === 'pabellon') {
         setError('Tienes que ingresar como Pabellón')
         setLoading(false)
-        // Cerrar sesión después de mostrar el error
         setTimeout(async () => {
-          await supabase.auth.signOut()
+          await signOut()
           sessionStorage.removeItem('validating_login')
         }, 100)
         return
       }
 
-      // Si todo está bien, limpiar el flag y los intentos fallidos
       sessionStorage.removeItem('validating_login')
       clearLoginAttempts(email)
-      // También limpiar por email si se usó username
-      if (!isEmail && emailToUse) {
-        clearLoginAttempts(emailToUse)
-      }
+      if (!isEmail && emailToUse) clearLoginAttempts(emailToUse)
 
-      // Si no es doctor, rechazar
       if (userData.role !== 'doctor') {
-        await supabase.auth.signOut()
+        await signOut()
         throw new Error('Este acceso es solo para usuarios de Doctor')
       }
 
-      // SEGUNDO: Verificar que exista en la tabla doctors y tenga acceso habilitado
-      const { data: doctorData, error: doctorError } = await supabase
-        .from('doctors')
-        .select('*')
-        .eq('user_id', data.user.id)
-        .maybeSingle()
+      const { doctorData, error: doctorError } = await verifyDoctorAccess(data.user.id)
 
-      if (doctorError && doctorError.code !== 'PGRST116') {
-        throw doctorError
-      }
+      if (doctorError) throw doctorError
 
       if (!doctorData) {
-        await supabase.auth.signOut()
+        await signOut()
         throw new Error('No se encontró información del doctor. Contacte al administrador.')
       }
 
@@ -161,7 +132,7 @@ export default function LoginDoctor() {
         setErrorType('blocked_account')
         setError('Su cuenta no tiene acceso web habilitado. Solo el administrador (Pabellón) puede activarlo. Contacte a la clínica si necesita ingresar al portal.')
         setLoading(false)
-        await supabase.auth.signOut()
+        await signOut()
         return
       }
 
@@ -169,14 +140,11 @@ export default function LoginDoctor() {
         setErrorType('blocked_account')
         setError('Su cuenta está en modo vacaciones. No puede acceder al sistema hasta que un administrador cambie su estado a activo. Contacte a la clínica si necesita ingresar.')
         setLoading(false)
-        await supabase.auth.signOut()
+        await signOut()
         return
       }
 
-      // Esperar un momento para que App.jsx detecte el cambio de autenticación
       await new Promise(resolve => setTimeout(resolve, 100))
-      
-      // Usar window.location para forzar la navegación completa
       window.location.href = '/doctor'
     } catch (err) {
       sessionStorage.removeItem('validating_login')
@@ -200,7 +168,7 @@ export default function LoginDoctor() {
 
         <div className="flex justify-center mb-6 sm:mb-8">
           <div className="bg-green-600 p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-xl shadow-green-200 rotate-6">
-              <Stethoscope className="text-white w-6 h-6 sm:w-8 sm:h-8" />
+            <Stethoscope className="text-white w-6 h-6 sm:w-8 sm:h-8" />
           </div>
         </div>
         <div className="text-center mb-8 sm:mb-10">
@@ -210,7 +178,7 @@ export default function LoginDoctor() {
 
         <form onSubmit={handleLogin} className="space-y-4 sm:space-y-6">
           {lockoutInfo?.isLocked && (
-            <div className="bg-orange-50 border-2 border-orange-200 text-orange-700 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl flex items-center gap-2 animate-in fade-in duration-300">
+            <div className="bg-orange-50 border-2 border-orange-200 text-orange-700 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl flex items-center gap-2 animate-in fade-in duration-300" role="alert">
               <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
               <span className="text-[10px] sm:text-xs font-bold break-words">
                 Cuenta bloqueada. Intenta nuevamente en {lockoutInfo.remainingTime}.
@@ -225,6 +193,7 @@ export default function LoginDoctor() {
                   ? 'bg-amber-50 border-2 border-amber-300 text-amber-900'
                   : 'bg-red-50 border-2 border-red-200 text-red-700'
               }`}
+              role="alert"
             >
               <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 mt-0.5" />
               <div className="flex flex-col gap-0.5">
@@ -239,9 +208,11 @@ export default function LoginDoctor() {
           )}
 
           <div className="space-y-1.5 sm:space-y-2">
-            <label htmlFor="email" className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Usuario o Correo</label>
+            <label htmlFor="email" className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+              Usuario o Correo
+            </label>
             <div className="relative">
-              <Mail className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4 sm:w-[18px] sm:h-[18px]" />
+              <Mail className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4 sm:w-[18px] sm:h-[18px]" aria-hidden="true" />
               <input
                 id="email"
                 type="text"
@@ -251,6 +222,7 @@ export default function LoginDoctor() {
                 placeholder="evenegas o doctor@clinica.cl"
                 required
                 disabled={loading}
+                autoComplete="username"
               />
             </div>
             <p className="text-[10px] sm:text-xs text-slate-400 ml-1">
@@ -259,9 +231,11 @@ export default function LoginDoctor() {
           </div>
 
           <div className="space-y-1.5 sm:space-y-2">
-            <label htmlFor="password" className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Contraseña</label>
+            <label htmlFor="password" className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+              Contraseña
+            </label>
             <div className="relative">
-              <Lock className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4 sm:w-[18px] sm:h-[18px]" />
+              <Lock className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4 sm:w-[18px] sm:h-[18px]" aria-hidden="true" />
               <input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
@@ -271,12 +245,13 @@ export default function LoginDoctor() {
                 placeholder="••••••••"
                 required
                 disabled={loading}
+                autoComplete="current-password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 transition-colors"
-                title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
                 tabIndex={-1}
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -287,6 +262,8 @@ export default function LoginDoctor() {
           <button
             type="submit"
             disabled={loading || lockoutInfo?.isLocked}
+            aria-busy={loading}
+            aria-disabled={loading || lockoutInfo?.isLocked}
             className="w-full bg-green-600 hover:bg-green-700 text-white py-3 sm:py-4 rounded-xl sm:rounded-2xl font-black text-xs sm:text-sm uppercase tracking-[0.2em] shadow-xl shadow-green-200 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
           >
             {loading ? 'Iniciando sesión...' : lockoutInfo?.isLocked ? 'Cuenta Bloqueada' : 'Entrar al Sistema'}

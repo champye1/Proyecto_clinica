@@ -3,10 +3,31 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
+import * as Sentry from '@sentry/react'
 import { ThemeProvider } from './contexts/ThemeContext'
 import ErrorBoundary from './components/common/ErrorBoundary'
 import App from './App.jsx'
 import './index.css'
+
+// Inicializar Sentry solo en producción o si hay DSN configurado
+if (import.meta.env.VITE_SENTRY_DSN) {
+  Sentry.init({
+    dsn: import.meta.env.VITE_SENTRY_DSN,
+    environment: import.meta.env.MODE,
+    integrations: [
+      Sentry.browserTracingIntegration(),
+      Sentry.replayIntegration({
+        maskAllText: true,
+        blockAllMedia: true,
+      }),
+    ],
+    // Tracing
+    tracesSampleRate: import.meta.env.PROD ? 0.2 : 1.0,
+    // Session Replay
+    replaysSessionSampleRate: 0.1,
+    replaysOnErrorSampleRate: 1.0,
+  })
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {

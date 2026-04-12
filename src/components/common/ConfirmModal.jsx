@@ -2,15 +2,27 @@ import Modal from './Modal'
 import Button from './Button'
 import { AlertTriangle } from 'lucide-react'
 
-export default function ConfirmModal({ 
-  isOpen, 
-  onClose, 
-  onConfirm, 
+/**
+ * Modal de confirmación con tres variantes visuales.
+ * El foco inicial se pone en "Cancelar" para proteger contra pulsaciones accidentales.
+ * @param {boolean} isOpen - Controla la visibilidad
+ * @param {() => void} onClose - Cierra sin confirmar
+ * @param {() => void} onConfirm - Ejecuta la acción confirmada
+ * @param {string} [title='Confirmar acción'] - Título del modal
+ * @param {string|React.ReactNode} message - Mensaje de advertencia
+ * @param {string} [confirmText='Confirmar'] - Texto del botón de confirmación
+ * @param {string} [cancelText='Cancelar'] - Texto del botón de cancelación
+ * @param {'danger'|'warning'|'info'} [variant='danger'] - Estilo del ícono y botón
+ */
+export default function ConfirmModal({
+  isOpen,
+  onClose,
+  onConfirm,
   title = 'Confirmar acción',
   message,
   confirmText = 'Confirmar',
   cancelText = 'Cancelar',
-  variant = 'danger' // 'danger' | 'warning' | 'info'
+  variant = 'danger',
 }) {
   const handleConfirm = () => {
     onConfirm()
@@ -54,6 +66,7 @@ export default function ConfirmModal({
           <Button
             onClick={onClose}
             variant="secondary"
+            autoFocus
           >
             {cancelText}
           </Button>

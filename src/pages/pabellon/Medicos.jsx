@@ -13,6 +13,7 @@ import { exportToCSV, exportToExcel, formatRelatedObject } from '../../utils/exp
 import Pagination from '../../components/common/Pagination'
 import ConfirmModal from '../../components/common/ConfirmModal'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
+import { TableSkeleton } from '../../components/common/Skeleton'
 import { useTheme } from '../../contexts/ThemeContext'
 
 const ESPECIALIDADES = [
@@ -657,9 +658,13 @@ export default function Medicos() {
         ? 'bg-green-900 text-green-200'
         : 'bg-yellow-900 text-yellow-200'
     }
-    return estado === 'activo' 
+    return estado === 'activo'
       ? 'bg-green-100 text-green-800'
       : 'bg-yellow-100 text-yellow-800'
+  }
+
+  if (isLoading) {
+    return <TableSkeleton rows={8} />
   }
 
   return (

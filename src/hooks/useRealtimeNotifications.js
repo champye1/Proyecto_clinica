@@ -1,21 +1,62 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../config/supabase'
 import { logger } from '../utils/logger'
 import { useNotifications } from './useNotifications'
 
+const BACKOFF_INITIAL_MS = 10_000
+const BACKOFF_MAX_MS = 120_000
+const BACKOFF_MULTIPLIER = 2
+
 /**
- * Hook para escuchar notificaciones en tiempo real usando Supabase Realtime
+ * Hook para escuchar notificaciones en tiempo real usando Supabase Realtime.
+ * Incluye un fallback de polling con backoff exponencial (10s → 20s → 40s → máx 120s)
+ * que se reinicia cuando llega una actualización o cuando la pestaña recupera el foco.
+ *
  * @param {string} userId - ID del usuario actual
  */
 export function useRealtimeNotifications(userId) {
   const queryClient = useQueryClient()
   const { showSuccess, showInfo } = useNotifications()
 
+  const backoffMs = useRef(BACKOFF_INITIAL_MS)
+  const fallbackTimerId = useRef(null)
+
+  // Invalida todas las queries relacionadas con notificaciones/cirugías
+  const invalidateAll = useCallback(() => {
+    queryClient.invalidateQueries(['notifications'])
+    queryClient.invalidateQueries(['unread-notifications-count'])
+    queryClient.invalidateQueries(['cirugias-hoy'])
+    queryClient.invalidateQueries(['cirugias-calendario'])
+    queryClient.invalidateQueries(['solicitudes-pendientes'])
+  }, [queryClient])
+
+  // Reinicia el backoff a su valor inicial y reprograma el timer
+  const resetBackoff = useCallback(() => {
+    backoffMs.current = BACKOFF_INITIAL_MS
+    clearTimeout(fallbackTimerId.current)
+    scheduleFallback()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const scheduleFallback = useCallback(() => {
+    clearTimeout(fallbackTimerId.current)
+    fallbackTimerId.current = setTimeout(() => {
+      // Sólo consulta si la pestaña es visible
+      if (document.visibilityState === 'visible') {
+        invalidateAll()
+      }
+      // Avanza al siguiente nivel de backoff (máximo BACKOFF_MAX_MS)
+      backoffMs.current = Math.min(backoffMs.current * BACKOFF_MULTIPLIER, BACKOFF_MAX_MS)
+      scheduleFallback()
+    }, backoffMs.current)
+  }, [invalidateAll])
+
   useEffect(() => {
     if (!userId) return
 
-    // Canal para notificaciones
+    // ── Supabase Realtime ───────────────────────────────────────────────────
+
     const notificationsChannel = supabase
       .channel(`notifications:${userId}`)
       .on(
@@ -29,12 +70,13 @@ export function useRealtimeNotifications(userId) {
         (payload) => {
           logger.debug('Nueva notificación recibida:', payload.new)
           queryClient.invalidateQueries(['notifications'])
+          queryClient.invalidateQueries(['unread-notifications-count'])
           showInfo(`Nueva notificación: ${payload.new.titulo}`)
+          resetBackoff()
         }
       )
       .subscribe()
 
-    // Canal para cambios en solicitudes (solo para doctores)
     const requestsChannel = supabase
       .channel(`surgery_requests:${userId}`)
       .on(
@@ -49,8 +91,8 @@ export function useRealtimeNotifications(userId) {
           queryClient.invalidateQueries(['solicitudes'])
           queryClient.invalidateQueries(['solicitudes-doctor'])
           queryClient.invalidateQueries(['solicitudes-pendientes'])
-          
-          // Notificar cambios de estado importantes
+          resetBackoff()
+
           if (payload.new.estado === 'aceptada' && payload.old.estado === 'pendiente') {
             showSuccess('Tu solicitud ha sido aceptada')
           } else if (payload.new.estado === 'rechazada' && payload.old.estado === 'pendiente') {
@@ -60,7 +102,6 @@ export function useRealtimeNotifications(userId) {
       )
       .subscribe()
 
-    // Canal para cambios en cirugías
     const surgeriesChannel = supabase
       .channel(`surgeries:${userId}`)
       .on(
@@ -78,20 +119,40 @@ export function useRealtimeNotifications(userId) {
           queryClient.invalidateQueries(['calendario-doctor-cirugias'])
           queryClient.invalidateQueries(['cirugias-dia-detalle'])
           queryClient.invalidateQueries(['cirugias-fecha'])
-          
-          // Notificar cancelaciones
-          if (payload.eventType === 'UPDATE' && payload.new.estado === 'cancelada' && payload.old.estado === 'programada') {
+          resetBackoff()
+
+          if (
+            payload.eventType === 'UPDATE' &&
+            payload.new.estado === 'cancelada' &&
+            payload.old.estado === 'programada'
+          ) {
             showInfo('Una cirugía ha sido cancelada')
           }
         }
       )
       .subscribe()
 
-    // Cleanup
+    // ── Fallback polling con backoff exponencial ────────────────────────────
+
+    backoffMs.current = BACKOFF_INITIAL_MS
+    scheduleFallback()
+
+    // ── Window focus: reinicia backoff e invalida inmediatamente ───────────
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        invalidateAll()
+        resetBackoff()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
     return () => {
       supabase.removeChannel(notificationsChannel)
       supabase.removeChannel(requestsChannel)
       supabase.removeChannel(surgeriesChannel)
+      clearTimeout(fallbackTimerId.current)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [userId, queryClient, showSuccess, showInfo])
+  }, [userId, queryClient, showSuccess, showInfo, invalidateAll, resetBackoff, scheduleFallback])
 }

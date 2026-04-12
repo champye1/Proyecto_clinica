@@ -3,10 +3,11 @@ import { supabase } from '../config/supabase'
 import { logger } from '../utils/logger'
 
 /**
- * Hook para obtener la lista de notificaciones del usuario
+ * Hook para obtener la lista de notificaciones del usuario y marcarlas como leídas.
  */
 export function useNotificationsList(userId, options = {}) {
   const queryClient = useQueryClient()
+
   const { data: notifications = [], isLoading } = useQuery({
     queryKey: ['notifications', userId],
     queryFn: async () => {
