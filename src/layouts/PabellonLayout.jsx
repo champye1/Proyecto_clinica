@@ -4,12 +4,12 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { supabase } from '../config/supabase'
 import { 
-  LayoutDashboard, 
-  FileText, 
-  Calendar, 
-  Clock, 
-  Users, 
-  Package, 
+  LayoutDashboard,
+  FileText,
+  Calendar,
+  Clock,
+  Users,
+  Package,
   LogOut,
   Home,
   PanelLeftClose,
@@ -22,8 +22,10 @@ import {
   Stethoscope,
   Sun,
   Moon,
-  Activity
+  Activity,
+  Mail
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import Dashboard from '../pages/pabellon/Dashboard'
 import Solicitudes from '../pages/pabellon/Solicitudes'
 import Calendario from '../pages/pabellon/Calendario'
@@ -31,6 +33,7 @@ import BloqueoHorario from '../pages/pabellon/BloqueoHorario'
 import Medicos from '../pages/pabellon/Medicos'
 import Insumos from '../pages/pabellon/Insumos'
 import Auditoria from '../pages/pabellon/Auditoria'
+import Correos from '../pages/pabellon/Correos'
 import { useRealtimeNotifications } from '../hooks/useRealtimeNotifications'
 import { useUnreadNotifications } from '../hooks/useUnreadNotifications'
 import { useNotificationsList } from '../hooks/useNotificationsList'
@@ -44,6 +47,7 @@ const menuItems = [
   { path: '/pabellon/bloqueo', icon: Clock, label: 'Bloqueo Horario' },
   { path: '/pabellon/medicos', icon: Users, label: 'Médicos' },
   { path: '/pabellon/insumos', icon: Package, label: 'Insumos' },
+  { path: '/pabellon/correos', icon: Mail, label: 'Correos', badge: true },
   { path: '/pabellon/auditoria', icon: FileSearch, label: 'Auditoría' },
 ]
 
@@ -87,10 +91,27 @@ export default function PabellonLayout() {
 
   // Activar notificaciones en tiempo real
   useRealtimeNotifications(userId)
-  
+
   // Obtener contador de notificaciones no leídas
   const { count: unreadCount } = useUnreadNotifications(userId)
   const { notifications, markAsRead, markAllAsRead } = useNotificationsList(userId, { enabled: showNotificationsDropdown })
+
+  // Correos externos no leídos
+  const { data: correosNoLeidos = 0 } = useQuery({
+    queryKey: ['external-messages-unread'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('external_messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('leido', false)
+        .eq('archivado', false)
+        .is('deleted_at', null)
+      if (error) return 0
+      return count || 0
+    },
+    enabled: !!userId,
+    refetchInterval: 30000,
+  })
 
   const handleLogout = async () => {
     // Limpiar todos los datos almacenados antes de cerrar sesión
@@ -176,6 +197,7 @@ export default function PabellonLayout() {
           {menuItems.map((item) => {
             const Icon = item.icon
             const active = isSelected(item.path)
+            const badgeCount = item.badge ? correosNoLeidos : 0
             return (
               <Link
                 key={item.path}
@@ -187,13 +209,25 @@ export default function PabellonLayout() {
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <Icon 
-                    className={`w-[22px] h-[22px] ${active ? 'text-white' : theme === 'dark' ? 'text-slate-400 group-hover:text-white' : theme === 'medical' ? 'text-blue-200 group-hover:text-white' : 'text-slate-400 group-hover:text-blue-600'}`}
-                  />
+                  <div className="relative">
+                    <Icon
+                      className={`w-[22px] h-[22px] ${active ? 'text-white' : theme === 'dark' ? 'text-slate-400 group-hover:text-white' : theme === 'medical' ? 'text-blue-200 group-hover:text-white' : 'text-slate-400 group-hover:text-blue-600'}`}
+                    />
+                    {badgeCount > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-black rounded-full w-4 h-4 flex items-center justify-center border border-white">
+                        {badgeCount > 9 ? '9+' : badgeCount}
+                      </span>
+                    )}
+                  </div>
                   {!isCollapsed && (
                     <span className="font-bold text-sm uppercase tracking-tight">{item.label}</span>
                   )}
                 </div>
+                {!isCollapsed && badgeCount > 0 && (
+                  <span className="bg-red-500 text-white text-[9px] font-black rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+                    {badgeCount > 99 ? '99+' : badgeCount}
+                  </span>
+                )}
               </Link>
             )
           })}
@@ -243,6 +277,7 @@ export default function PabellonLayout() {
           {menuItems.map((item) => {
             const Icon = item.icon
             const active = isSelected(item.path)
+            const badgeCount = item.badge ? correosNoLeidos : 0
             return (
               <Link
                 key={item.path}
@@ -255,11 +290,23 @@ export default function PabellonLayout() {
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <Icon 
-                    className={`w-[22px] h-[22px] ${active ? 'text-white' : theme === 'dark' ? 'text-slate-400 group-hover:text-white' : theme === 'medical' ? 'text-blue-200 group-hover:text-white' : 'text-slate-400 group-hover:text-blue-600'}`}
-                  />
+                  <div className="relative">
+                    <Icon
+                      className={`w-[22px] h-[22px] ${active ? 'text-white' : theme === 'dark' ? 'text-slate-400 group-hover:text-white' : theme === 'medical' ? 'text-blue-200 group-hover:text-white' : 'text-slate-400 group-hover:text-blue-600'}`}
+                    />
+                    {badgeCount > 0 && isCollapsed && (
+                      <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-black rounded-full w-4 h-4 flex items-center justify-center border border-white">
+                        {badgeCount > 9 ? '9+' : badgeCount}
+                      </span>
+                    )}
+                  </div>
                   <span className="font-bold text-sm uppercase tracking-tight">{item.label}</span>
                 </div>
+                {badgeCount > 0 && (
+                  <span className="bg-red-500 text-white text-[9px] font-black rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+                    {badgeCount > 99 ? '99+' : badgeCount}
+                  </span>
+                )}
               </Link>
             )
           })}
@@ -405,6 +452,7 @@ export default function PabellonLayout() {
             <Route path="/bloqueo" element={<BloqueoHorario />} />
             <Route path="/medicos" element={<Medicos />} />
             <Route path="/insumos" element={<Insumos />} />
+            <Route path="/correos" element={<Correos />} />
             <Route path="/auditoria" element={<Auditoria />} />
             <Route path="*" element={<Navigate to="/pabellon" />} />
           </Routes>

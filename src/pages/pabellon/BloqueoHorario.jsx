@@ -5,9 +5,9 @@ import { Calendar, Clock, Users, X, Edit, CheckCircle, XCircle, Lock } from 'luc
 import { useNotifications } from '../../hooks/useNotifications'
 import { sanitizeString, sanitizeNumber } from '../../utils/sanitizeInput'
 import { HORAS_SELECT } from '../../utils/horasOpciones'
+import Pagination from '../../components/common/Pagination'
 
 const HORAS_PARA_PREVIEW = HORAS_SELECT
-import Pagination from '../../components/common/Pagination'
 import ConfirmModal from '../../components/common/ConfirmModal'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { format } from 'date-fns'

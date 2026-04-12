@@ -93,7 +93,7 @@ export default function CrearPaciente() {
 
       const { data, error } = await supabase
         .from('doctors')
-        .select('id, estado')
+        .select('id, estado, nombre, apellido')
         .eq('user_id', user.id)
         .single()
       
@@ -293,6 +293,28 @@ export default function CrearPaciente() {
           .insert(insumosData)
 
         if (insumosError) throw insumosError
+      }
+
+      // Notificar a todos los usuarios de pabellón que hay una nueva orden sin agendar
+      try {
+        const { data: pabellonUsers } = await supabase
+          .from('users')
+          .select('id')
+          .eq('role', 'pabellon')
+          .is('deleted_at', null)
+
+        if (pabellonUsers && pabellonUsers.length > 0) {
+          const notificaciones = pabellonUsers.map(u => ({
+            user_id: u.id,
+            tipo: 'orden_sin_agendar',
+            titulo: 'Nueva orden de cirugía sin agendar',
+            mensaje: `Dr. ${doctor.nombre} ${doctor.apellido} tiene un paciente pendiente de agendamiento: ${data.nombre} ${data.apellido} — ${data.codigo_operacion}`,
+            relacionado_con: solicitud.id,
+          }))
+          await supabase.from('notifications').insert(notificaciones)
+        }
+      } catch {
+        // No bloquear la creación de solicitud si falla la notificación
       }
 
       return { paciente, solicitud }
