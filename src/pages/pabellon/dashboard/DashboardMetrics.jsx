@@ -1,9 +1,21 @@
 import { Activity, Inbox, TrendingUp, LayoutGrid, Timer, BarChart3 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import Card from '../../../components/common/Card'
-import Tooltip from '../../../components/common/Tooltip'
-import { MetricSkeleton } from '../../../components/common/Skeleton'
-import { useTheme } from '../../../contexts/ThemeContext'
+import Card from '@/components/common/Card'
+import Tooltip from '@/components/common/Tooltip'
+import { MetricSkeleton } from '@/components/common/Skeleton'
+import { useTheme } from '@/contexts/ThemeContext'
+
+// ─── Estilos ──────────────────────────────────────────────────────────────────
+const STYLES = {
+  metricsGrid:  'grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8 lg:mb-10',
+  cardInner:    'p-4 sm:p-5 lg:p-6 flex items-center gap-3 sm:gap-4 lg:gap-5',
+  iconBox:      'p-3 sm:p-3.5 lg:p-4 rounded-xl sm:rounded-2xl flex-shrink-0',
+  statLabel:    'text-[9px] sm:text-[10px] font-black uppercase truncate text-slate-400',
+  statValueDark:'text-lg sm:text-xl lg:text-2xl font-black truncate text-white',
+  statValueLight:'text-lg sm:text-xl lg:text-2xl font-black truncate text-slate-800',
+  statContent:   'min-w-0 flex-1',
+  statIconSm:    'sm:w-5 sm:h-5 lg:w-6 lg:h-6',
+}
 
 /**
  * Las 6 tarjetas KPI del Dashboard de Pabellón.
@@ -111,20 +123,14 @@ export default function DashboardMetrics({
       <Card
         hover={!!stat.onClick}
         onClick={stat.onClick}
-        className={`p-4 sm:p-5 lg:p-6 flex items-center gap-3 sm:gap-4 lg:gap-5 ${
-          stat.onClick ? 'cursor-pointer' : 'cursor-default'
-        }`}
+        className={`${STYLES.cardInner} ${stat.onClick ? 'cursor-pointer' : 'cursor-default'}`}
       >
-        <div className={`${stat.bg} ${stat.color} p-3 sm:p-3.5 lg:p-4 rounded-xl sm:rounded-2xl flex-shrink-0`}>
-          <stat.icon size={18} className="sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
+        <div className={`${STYLES.iconBox} ${stat.bg} ${stat.color}`}>
+          <stat.icon size={18} className={STYLES.statIconSm} />
         </div>
-        <div className="min-w-0 flex-1">
-          <div className={`text-[9px] sm:text-[10px] font-black uppercase truncate ${
-            isDark ? 'text-slate-400' : 'text-slate-400'
-          }`}>{stat.label}</div>
-          <div className={`text-lg sm:text-xl lg:text-2xl font-black truncate ${
-            isDark ? 'text-white' : 'text-slate-800'
-          }`}>{stat.value}</div>
+        <div className={STYLES.statContent}>
+          <div className={STYLES.statLabel}>{stat.label}</div>
+          <div className={isDark ? STYLES.statValueDark : STYLES.statValueLight}>{stat.value}</div>
         </div>
       </Card>
     </Tooltip>
@@ -133,10 +139,10 @@ export default function DashboardMetrics({
   if (isLoading) {
     return (
       <>
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8 lg:mb-10">
+        <div className={STYLES.metricsGrid}>
           {Array.from({ length: 3 }).map((_, i) => <MetricSkeleton key={i} />)}
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8 lg:mb-10">
+        <div className={STYLES.metricsGrid}>
           {Array.from({ length: 3 }).map((_, i) => <MetricSkeleton key={i} />)}
         </div>
       </>
@@ -145,10 +151,10 @@ export default function DashboardMetrics({
 
   return (
     <>
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8 lg:mb-10">
+      <div className={STYLES.metricsGrid}>
         {primaryStats.map(stat => <StatCard key={stat.id} stat={stat} />)}
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8 lg:mb-10">
+      <div className={STYLES.metricsGrid}>
         {secondaryStats.map(stat => <StatCard key={stat.id} stat={stat} />)}
       </div>
     </>

@@ -1,8 +1,35 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Mail, Stethoscope, ArrowLeft } from 'lucide-react'
-import { sanitizeEmail } from '../../utils/sanitizeInput'
-import { resolveUsernameToEmail, sendPasswordResetEmail } from '../../services/authService'
+import { sanitizeEmail } from '@/utils/sanitizeInput'
+import { resolveUsernameToEmail, sendPasswordResetEmail } from '@/services/authService'
+
+// ─── Estilos ──────────────────────────────────────────────────────────────────
+const STYLES = {
+  page:       'min-h-screen flex items-center justify-center bg-slate-50 p-4 sm:p-6',
+  card:       'bg-white p-6 sm:p-8 lg:p-10 rounded-2xl sm:rounded-[2.5rem] shadow-2xl w-full max-w-md border border-slate-100',
+  cardCenter: 'bg-white p-6 sm:p-8 lg:p-10 rounded-2xl sm:rounded-[2.5rem] shadow-2xl w-full max-w-md border border-slate-100 text-center',
+  backBtn:    'flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-6 font-bold text-[10px] sm:text-xs uppercase tracking-widest',
+  iconWrap:   'bg-green-600 p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-xl shadow-green-200 rotate-6',
+  title:      'text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tighter',
+  label:      'text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1',
+  inputIcon:  'absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4',
+  input:      'w-full bg-slate-50 border-2 border-slate-50 rounded-xl py-3 pl-10 pr-4 focus:border-green-500 focus:bg-white outline-none font-bold text-sm text-slate-700',
+  errorBox:   'bg-red-50 border-2 border-red-200 text-red-700 px-3 py-2.5 rounded-xl text-sm',
+  submitBtn:  'w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed',
+  backLink:   'inline-flex items-center gap-2 text-green-600 hover:text-green-700 font-bold text-sm',
+  logoWrap:   'flex justify-center mb-6',
+  sentText:   'text-slate-600 text-sm mb-6',
+  sentNote:   'text-slate-500 text-xs mb-8',
+  arrowIcon:  'w-4 h-4',
+  backArrow:  'w-3 h-3 sm:w-4 sm:h-4',
+  logoMainIcon:'text-white w-6 h-6 sm:w-8 sm:h-8',
+  headerSection:'text-center mb-8',
+  headerNote: 'text-slate-500 text-xs mt-2',
+  form:       'space-y-4',
+  fieldWrap:  '',
+  inputWrap:  'relative mt-1',
+}
 
 export default function RecuperarContraseña() {
   const [emailOrUser, setEmailOrUser] = useState('')
@@ -22,7 +49,6 @@ export default function RecuperarContraseña() {
         return
       }
 
-      // Si no es un email, intentar resolver username -> email (doctores)
       if (!emailToUse.includes('@')) {
         const { email: resolved, error: rpcError } = await resolveUsernameToEmail(emailToUse)
         if (rpcError || !resolved) {
@@ -47,27 +73,23 @@ export default function RecuperarContraseña() {
 
   if (sent) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 sm:p-6">
-        <div className="bg-white p-6 sm:p-8 lg:p-10 rounded-2xl sm:rounded-[2.5rem] shadow-2xl w-full max-w-md border border-slate-100 text-center">
-          <div className="flex justify-center mb-6">
-            <div className="bg-green-600 p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-xl shadow-green-200 rotate-6">
-              <Stethoscope className="text-white w-6 h-6 sm:w-8 sm:h-8" />
+      <div className={STYLES.page}>
+        <div className={STYLES.cardCenter}>
+          <div className={STYLES.logoWrap}>
+            <div className={STYLES.iconWrap}>
+              <Stethoscope className={STYLES.logoMainIcon} />
             </div>
           </div>
-          <h1 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tighter mb-2">
-            Revisa tu correo
-          </h1>
-          <p className="text-slate-600 text-sm mb-6">
-            Te enviamos un enlace para restablecer tu contraseña. Revisa la bandeja de entrada y la carpeta de spam.
+          <h1 className={`${STYLES.title} mb-2`}>Revisa tu correo</h1>
+          <p className={STYLES.sentText}>
+            Te enviamos un enlace para restablecer tu contraseña. Revisa la bandeja de
+            entrada y la carpeta de spam.
           </p>
-          <p className="text-slate-500 text-xs mb-8">
+          <p className={STYLES.sentNote}>
             El enlace vence en 1 hora. Si no llega, vuelve a solicitarlo.
           </p>
-          <Link
-            to="/login/doctor"
-            className="inline-flex items-center gap-2 text-green-600 hover:text-green-700 font-bold text-sm"
-          >
-            <ArrowLeft className="w-4 h-4" />
+          <Link to="/login/doctor" className={STYLES.backLink}>
+            <ArrowLeft className={STYLES.arrowIcon} />
             Volver al inicio de sesión
           </Link>
         </div>
@@ -76,59 +98,47 @@ export default function RecuperarContraseña() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 sm:p-6">
-      <div className="bg-white p-6 sm:p-8 lg:p-10 rounded-2xl sm:rounded-[2.5rem] shadow-2xl w-full max-w-md border border-slate-100">
-        <button
-          onClick={() => navigate('/login/doctor')}
-          className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-6 font-bold text-[10px] sm:text-xs uppercase tracking-widest"
-        >
-          <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4" />
+    <div className={STYLES.page}>
+      <div className={STYLES.card}>
+        <button onClick={() => navigate('/login/doctor')} className={STYLES.backBtn}>
+          <ArrowLeft className={STYLES.backArrow} />
           Volver al login
         </button>
 
-        <div className="flex justify-center mb-6">
-          <div className="bg-green-600 p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-xl shadow-green-200 rotate-6">
-            <Stethoscope className="text-white w-6 h-6 sm:w-8 sm:h-8" />
+        <div className={STYLES.logoWrap}>
+          <div className={STYLES.iconWrap}>
+            <Stethoscope className={STYLES.logoMainIcon} />
           </div>
         </div>
-        <div className="text-center mb-8">
-          <h1 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tighter">
-            Recuperar contraseña
-          </h1>
-          <p className="text-slate-500 text-xs mt-2">
+
+        <div className={STYLES.headerSection}>
+          <h1 className={STYLES.title}>Recuperar contraseña</h1>
+          <p className={STYLES.headerNote}>
             Portal médico – te enviaremos un enlace a tu correo
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <div className="bg-red-50 border-2 border-red-200 text-red-700 px-3 py-2.5 rounded-xl text-sm">
-              {error}
-            </div>
-          )}
+        <form onSubmit={handleSubmit} className={STYLES.form}>
+          {error && <div className={STYLES.errorBox}>{error}</div>}
+
           <div>
-            <label htmlFor="email" className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-              Correo o usuario
-            </label>
-            <div className="relative mt-1">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4" />
+            <label htmlFor="email" className={STYLES.label}>Correo o usuario</label>
+            <div className={STYLES.inputWrap}>
+              <Mail className={STYLES.inputIcon} />
               <input
                 id="email"
                 type="text"
                 value={emailOrUser}
                 onChange={(e) => setEmailOrUser(sanitizeEmail(e.target.value))}
-                className="w-full bg-slate-50 border-2 border-slate-50 rounded-xl py-3 pl-10 pr-4 focus:border-green-500 focus:bg-white outline-none font-bold text-sm text-slate-700"
+                className={STYLES.input}
                 placeholder="evenegas o doctor@clinica.cl"
                 disabled={loading}
                 autoComplete="email"
               />
             </div>
           </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+
+          <button type="submit" disabled={loading} className={STYLES.submitBtn}>
             {loading ? 'Enviando...' : 'Enviar enlace de recuperación'}
           </button>
         </form>

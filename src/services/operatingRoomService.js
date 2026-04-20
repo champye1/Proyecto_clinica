@@ -2,8 +2,9 @@
  * Servicio de salas de pabellón.
  * Centraliza todas las operaciones sobre la tabla operating_rooms.
  */
-import { supabase } from '../config/supabase'
-import { logger } from '../utils/logger'
+import { supabase } from '@/config/supabase'
+import { logger } from '@/utils/logger'
+import { getMyClinicaId } from '@/utils/getClinicaId'
 
 /**
  * Obtiene todas las salas activas.
@@ -56,4 +57,79 @@ export async function fetchTodayOccupancy() {
     data: { surgeries: surgeries ?? [], blocks: blocks ?? [] },
     error: null,
   }
+}
+
+/**
+ * Crea una nueva sala de pabellón.
+ * @param {object} roomData - { nombre, descripcion? }
+ * @returns {Promise<{data: object|null, error: object|null}>}
+ */
+export async function createRoom(roomData) {
+  const clinicaId = await getMyClinicaId()
+  const { data, error } = await supabase
+    .from('operating_rooms')
+    .insert({ ...roomData, clinica_id: clinicaId, activo: true })
+    .select()
+    .single()
+
+  if (error) {
+    logger.errorWithContext('operatingRoomService.createRoom', error)
+    return { data: null, error }
+  }
+  return { data, error: null }
+}
+
+/**
+ * Actualiza una sala de pabellón.
+ * @param {string} roomId
+ * @param {object} updates - { nombre?, descripcion?, activo? }
+ * @returns {Promise<{data: object|null, error: object|null}>}
+ */
+export async function updateRoom(roomId, updates) {
+  const { data, error } = await supabase
+    .from('operating_rooms')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', roomId)
+    .select()
+    .single()
+
+  if (error) {
+    logger.errorWithContext('operatingRoomService.updateRoom', error, { roomId })
+    return { data: null, error }
+  }
+  return { data, error: null }
+}
+
+/**
+ * Elimina (desactiva) una sala de pabellón.
+ * @param {string} roomId
+ * @returns {Promise<{error: object|null}>}
+ */
+export async function deleteRoom(roomId) {
+  const { error } = await supabase
+    .from('operating_rooms')
+    .update({ activo: false, updated_at: new Date().toISOString() })
+    .eq('id', roomId)
+
+  if (error) {
+    logger.errorWithContext('operatingRoomService.deleteRoom', error, { roomId })
+  }
+  return { error }
+}
+
+/**
+ * Obtiene todas las salas (activas e inactivas) para configuración.
+ * @returns {Promise<{data: object[], error: object|null}>}
+ */
+export async function fetchAllRooms() {
+  const { data, error } = await supabase
+    .from('operating_rooms')
+    .select('id, nombre, activo')
+    .order('nombre', { ascending: true })
+
+  if (error) {
+    logger.errorWithContext('operatingRoomService.fetchAllRooms', error)
+    return { data: [], error }
+  }
+  return { data: data ?? [], error: null }
 }

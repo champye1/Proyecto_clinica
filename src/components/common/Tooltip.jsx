@@ -17,6 +17,8 @@ export default function Tooltip({ children, content, position = 'top' }) {
     right: 'left-full top-1/2 -translate-y-1/2 ml-2',
   }
 
+  const STYLES = { wrapper: 'relative inline-block' }
+
   const arrowClasses = {
     top: 'top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900',
     bottom: 'bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-slate-900',
@@ -25,8 +27,8 @@ export default function Tooltip({ children, content, position = 'top' }) {
   }
 
   return (
-    <div 
-      className="relative inline-block"
+    <div
+      className={STYLES.wrapper}
       onMouseEnter={() => setIsVisible(true)}
       onMouseLeave={() => setIsVisible(false)}
     >

@@ -1,15 +1,76 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '../../config/supabase'
+import { supabase } from '@/config/supabase'
 import { Plus, Edit, Trash2, Search, Download, FileSpreadsheet } from 'lucide-react'
-import { useNotifications } from '../../hooks/useNotifications'
-import { useDebounce } from '../../hooks/useDebounce'
-import { exportToCSV, exportToExcel } from '../../utils/exportData'
-import { sanitizeString, sanitizeCode } from '../../utils/sanitizeInput'
-import Pagination from '../../components/common/Pagination'
-import ConfirmModal from '../../components/common/ConfirmModal'
-import LoadingSpinner from '../../components/common/LoadingSpinner'
-import { useTheme } from '../../contexts/ThemeContext'
+import { useNotifications } from '@/hooks/useNotifications'
+import { useDebounce } from '@/hooks/useDebounce'
+import { exportToCSV, exportToExcel } from '@/utils/exportData'
+import { sanitizeString, sanitizeCode } from '@/utils/sanitizeInput'
+import Pagination from '@/components/common/Pagination'
+import ConfirmModal from '@/components/common/ConfirmModal'
+import LoadingSpinner from '@/components/common/LoadingSpinner'
+import { useTheme } from '@/contexts/ThemeContext'
+
+// ─── Estilos ──────────────────────────────────────────────────────────────────
+const STYLES = {
+  page:           'space-y-6',
+  header:         'flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4',
+  title:          'text-2xl sm:text-3xl font-bold text-gray-900',
+  actionsRow:     'flex flex-wrap gap-2',
+  exportBtn:      'btn-secondary flex items-center gap-2 text-sm',
+  exportLabel:    'hidden sm:inline',
+  newBtn:         'btn-primary flex items-center gap-2 text-sm',
+  newBtnLabelSm:  'hidden sm:inline',
+  newBtnLabelXs:  'sm:hidden',
+  searchCard:     'card',
+  searchRow:      'flex gap-4',
+  searchWrap:     'flex-1 relative',
+  searchIcon:     'absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5',
+  searchInput:    'input-field pl-10',
+  filterSelect:   'input-field w-auto',
+  formCard:       'card',
+  formTitle:      'text-xl font-bold mb-4',
+  formBody:       'space-y-4',
+  formLabel:      'label-field',
+  formInput:      'input-field',
+  formInputError: 'input-field border-red-500',
+  formError:      'text-xs text-red-600 mt-1',
+  formHintDark:   'text-xs mt-1 text-slate-400',
+  formHintLight:  'text-xs mt-1 text-gray-500',
+  formFooter:     'flex gap-2',
+  tableCard:      'card',
+  tableWrap:      'overflow-x-auto',
+  table:          'w-full',
+  theadDark:      'border-b border-slate-700',
+  theadLight:     'border-b border-slate-200',
+  thDark:         'text-left py-3 px-4 font-medium text-slate-200',
+  thLight:        'text-left py-3 px-4 font-medium text-gray-700',
+  trDark:         'border-b bg-slate-800 border-slate-700 hover:bg-slate-700 transition-colors',
+  trLight:        'border-b bg-white border-slate-200 hover:bg-slate-50 transition-colors',
+  tdPrimaryDark:  'py-3 px-4 text-white',
+  tdPrimaryLight: 'py-3 px-4 text-gray-900',
+  tdMonoDark:     'py-3 px-4 font-mono text-slate-100',
+  tdMonoLight:    'py-3 px-4 font-mono text-gray-700',
+  tdDark:         'py-3 px-4 text-slate-100',
+  tdLight:        'py-3 px-4 text-gray-700',
+  tdFonasaDark:   'py-3 px-4 font-mono text-sm text-slate-300',
+  tdFonasaLight:  'py-3 px-4 font-mono text-sm text-gray-600',
+  tdActions:      'py-3 px-4',
+  actionsCell:    'flex gap-2',
+  editBtn:        'p-2 text-blue-600 hover:bg-blue-50 rounded',
+  deleteBtn:      'p-2 text-red-600 hover:bg-red-50 rounded',
+  emptyDark:      'text-center py-8 text-slate-300',
+  emptyLight:     'text-center py-8 text-gray-500',
+  loadingDark:    'text-center py-8 text-slate-300',
+  loadingLight:   'text-center py-8 text-gray-600',
+  iconSm:         'w-4 h-4',
+  iconMd:         'w-5 h-5',
+  iconSmMd:       'w-4 h-4 sm:w-5 sm:h-5',
+  submitBtn:      'btn-primary',
+  cancelBtn:      'btn-secondary',
+  loadingRow:     'flex items-center gap-2',
+  selectWrap:     'relative',
+}
 
 export default function Insumos() {
   const [busqueda, setBusqueda] = useState('')
@@ -114,7 +175,7 @@ export default function Insumos() {
       if (error) throw error
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['insumos'])
+      queryClient.invalidateQueries({ queryKey: ['insumos'] })
       setMostrarFormulario(false)
       setFormData({ nombre: '', codigo: '', grupo_prestacion: '', proveedor: '', grupos_fonasa: '' })
       setCodigoError('')
@@ -141,7 +202,7 @@ export default function Insumos() {
       if (error) throw error
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['insumos'])
+      queryClient.invalidateQueries({ queryKey: ['insumos'] })
       setInsumoEditando(null)
       setMostrarFormulario(false)
       setCodigoError('')
@@ -168,7 +229,7 @@ export default function Insumos() {
       if (error) throw error
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['insumos'])
+      queryClient.invalidateQueries({ queryKey: ['insumos'] })
       showSuccess('Insumo eliminado exitosamente')
     },
     onError: (error) => {
@@ -278,30 +339,24 @@ export default function Insumos() {
     setMostrarFormulario(true)
   }
 
+  const isDark = theme === 'dark'
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className={STYLES.page}>
+      <div className={STYLES.header}>
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Gestión de Insumos</h1>
+          <h1 className={STYLES.title}>Gestión de Insumos</h1>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className={STYLES.actionsRow}>
           {insumos.length > 0 && (
             <>
-              <button
-                onClick={handleExportCSV}
-                className="btn-secondary flex items-center gap-2 text-sm"
-                title="Exportar a CSV"
-              >
-                <Download className="w-4 h-4" />
-                <span className="hidden sm:inline">CSV</span>
+              <button onClick={handleExportCSV} className={STYLES.exportBtn} title="Exportar a CSV">
+                <Download className={STYLES.iconSm} />
+                <span className={STYLES.exportLabel}>CSV</span>
               </button>
-              <button
-                onClick={handleExportExcel}
-                className="btn-secondary flex items-center gap-2 text-sm"
-                title="Exportar a Excel"
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                <span className="hidden sm:inline">Excel</span>
+              <button onClick={handleExportExcel} className={STYLES.exportBtn} title="Exportar a Excel">
+                <FileSpreadsheet className={STYLES.iconSm} />
+                <span className={STYLES.exportLabel}>Excel</span>
               </button>
             </>
           )}
@@ -309,44 +364,38 @@ export default function Insumos() {
             onClick={() => {
               setMostrarFormulario(true)
               setInsumoEditando(null)
-              setFormData({ 
-                nombre: '', 
-                codigo: '', 
-                grupo_prestacion: '',
-                proveedor: '',
-                grupos_fonasa: '',
-              })
+              setFormData({ nombre: '', codigo: '', grupo_prestacion: '', proveedor: '', grupos_fonasa: '' })
               setCodigoError('')
               setCodigoTouched(false)
             }}
-            className="btn-primary flex items-center gap-2 text-sm"
+            className={STYLES.newBtn}
           >
-            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span className="hidden sm:inline">Nuevo Insumo</span>
-            <span className="sm:hidden">Nuevo</span>
+            <Plus className={STYLES.iconSmMd} />
+            <span className={STYLES.newBtnLabelSm}>Nuevo Insumo</span>
+            <span className={STYLES.newBtnLabelXs}>Nuevo</span>
           </button>
         </div>
       </div>
 
       {/* Búsqueda */}
-      <div className="card">
-        <div className="flex gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+      <div className={STYLES.searchCard}>
+        <div className={STYLES.searchRow}>
+          <div className={STYLES.searchWrap}>
+            <div className={STYLES.selectWrap}>
+              <Search className={STYLES.searchIcon} />
               <input
                 type="text"
                 value={busqueda}
                 onChange={(e) => setBusqueda(sanitizeString(e.target.value, { trim: false }))}
                 placeholder={`Buscar por ${filtroTipo === 'codigo' ? 'código' : 'nombre'}...`}
-                className="input-field pl-10"
+                className={STYLES.searchInput}
               />
             </div>
           </div>
           <select
             value={filtroTipo}
             onChange={(e) => setFiltroTipo(sanitizeString(e.target.value))}
-            className="input-field w-auto"
+            className={STYLES.filterSelect}
           >
             <option value="nombre">Por Nombre</option>
             <option value="codigo">Por Código</option>
@@ -355,93 +404,87 @@ export default function Insumos() {
       </div>
 
       {mostrarFormulario && (
-        <div className="card">
-          <h2 className="text-xl font-bold mb-4">
-            {insumoEditando ? 'Editar Insumo' : 'Nuevo Insumo'}
-          </h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <div className={STYLES.formCard}>
+          <h2 className={STYLES.formTitle}>{insumoEditando ? 'Editar Insumo' : 'Nuevo Insumo'}</h2>
+          <form onSubmit={handleSubmit} className={STYLES.formBody}>
             <div>
-              <label className="label-field">Nombre *</label>
+              <label className={STYLES.formLabel}>Nombre *</label>
               <input
                 type="text"
                 value={formData.nombre}
                 onChange={(e) => setFormData({ ...formData, nombre: sanitizeString(e.target.value) })}
-                className="input-field"
+                className={STYLES.formInput}
                 required
               />
             </div>
 
             <div>
-              <label className="label-field">Código *</label>
+              <label className={STYLES.formLabel}>Código *</label>
               <input
                 type="text"
                 value={formData.codigo}
                 onChange={(e) => {
                   const sanitized = sanitizeCode(e.target.value)
                   setFormData({ ...formData, codigo: sanitized })
-                  if (codigoTouched && !insumoEditando) {
-                    validarCodigo(sanitized)
-                  }
+                  if (codigoTouched && !insumoEditando) validarCodigo(sanitized)
                 }}
                 onBlur={() => {
                   setCodigoTouched(true)
-                  if (!insumoEditando) {
-                    validarCodigo(formData.codigo)
-                  }
+                  if (!insumoEditando) validarCodigo(formData.codigo)
                 }}
-                className={`input-field ${codigoError ? 'border-red-500' : ''}`}
+                className={codigoError ? STYLES.formInputError : STYLES.formInput}
                 required
                 disabled={!!insumoEditando}
               />
               {codigoError && codigoTouched && (
-                <p className="text-xs text-red-600 mt-1">{codigoError}</p>
+                <p className={STYLES.formError}>{codigoError}</p>
               )}
             </div>
 
             <div>
-              <label className="label-field">Grupo de Prestación *</label>
+              <label className={STYLES.formLabel}>Grupo de Prestación *</label>
               <input
                 type="text"
                 value={formData.grupo_prestacion}
                 onChange={(e) => setFormData({ ...formData, grupo_prestacion: sanitizeString(e.target.value) })}
-                className="input-field"
+                className={STYLES.formInput}
                 required
               />
             </div>
 
             <div>
-              <label className="label-field">Proveedor (opcional)</label>
+              <label className={STYLES.formLabel}>Proveedor (opcional)</label>
               <input
                 type="text"
                 value={formData.proveedor}
                 onChange={(e) => setFormData({ ...formData, proveedor: sanitizeString(e.target.value) })}
-                className="input-field"
+                className={STYLES.formInput}
                 placeholder="Quien proveyó el item"
               />
             </div>
 
             <div>
-              <label className="label-field">Grupos Fonasa (opcional)</label>
+              <label className={STYLES.formLabel}>Grupos Fonasa (opcional)</label>
               <input
                 type="text"
                 value={formData.grupos_fonasa}
                 onChange={(e) => setFormData({ ...formData, grupos_fonasa: sanitizeString(e.target.value) })}
-                className="input-field"
+                className={STYLES.formInput}
                 placeholder="Ej: 18, 11, 30 — Vacío = disponible para todas las cirugías"
               />
-              <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>
+              <p className={isDark ? STYLES.formHintDark : STYLES.formHintLight}>
                 Códigos de grupo de prestación FONASA (según tipo de cirugía): 18 = general, 11 = ortopedia, 20 = plástica, 30 = oftalmología, 40 = otorrino, 50 = urología, 60 = gineco. Separados por coma. Vacío = el insumo aplica a todas las cirugías.
               </p>
             </div>
 
-            <div className="flex gap-2">
-              <button 
-                type="submit" 
-                className="btn-primary"
+            <div className={STYLES.formFooter}>
+              <button
+                type="submit"
+                className={STYLES.submitBtn}
                 disabled={crearInsumo.isPending || actualizarInsumo.isPending}
               >
                 {crearInsumo.isPending || actualizarInsumo.isPending ? (
-                  <span className="flex items-center gap-2">
+                  <span className={STYLES.loadingRow}>
                     <LoadingSpinner size="sm" />
                     {insumoEditando ? 'Actualizando...' : 'Creando...'}
                   </span>
@@ -451,11 +494,8 @@ export default function Insumos() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setMostrarFormulario(false)
-                  setInsumoEditando(null)
-                }}
-                className="btn-secondary"
+                onClick={() => { setMostrarFormulario(false); setInsumoEditando(null) }}
+                className={STYLES.cancelBtn}
                 disabled={crearInsumo.isPending || actualizarInsumo.isPending}
               >
                 Cancelar
@@ -465,76 +505,69 @@ export default function Insumos() {
         </div>
       )}
 
-      <div className="card">
-        <div className="overflow-x-auto">
-          <table className="w-full">
+      <div className={STYLES.tableCard}>
+        <div className={STYLES.tableWrap}>
+          <table className={STYLES.table}>
             <thead>
-              <tr className={`border-b ${theme === 'dark' ? 'border-slate-700' : 'border-slate-200'}`}>
-                <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Nombre</th>
-                <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Código</th>
-                <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Grupo Prestación</th>
-                <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Proveedor</th>
-                <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`} title="Grupos de prestación FONASA para los que aplica este insumo (ej. 18=general, 11=ortopedia). Vacío = todas las cirugías.">Grupos Fonasa</th>
-                <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Acciones</th>
+              <tr className={isDark ? STYLES.theadDark : STYLES.theadLight}>
+                {['Nombre', 'Código', 'Grupo Prestación', 'Proveedor'].map(h => (
+                  <th key={h} className={isDark ? STYLES.thDark : STYLES.thLight}>{h}</th>
+                ))}
+                <th
+                  className={isDark ? STYLES.thDark : STYLES.thLight}
+                  title="Grupos de prestación FONASA para los que aplica este insumo (ej. 18=general, 11=ortopedia). Vacío = todas las cirugías."
+                >
+                  Grupos Fonasa
+                </th>
+                <th className={isDark ? STYLES.thDark : STYLES.thLight}>Acciones</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan="6" className={`text-center py-8 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'}`}>Cargando...</td>
+                  <td colSpan="6" className={isDark ? STYLES.loadingDark : STYLES.loadingLight}>Cargando...</td>
                 </tr>
               ) : insumos.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className={`text-center py-8 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-500'}`}>
+                  <td colSpan="6" className={isDark ? STYLES.emptyDark : STYLES.emptyLight}>
                     No se encontraron insumos
                   </td>
                 </tr>
               ) : (
                 insumosPaginados.map(insumo => (
-                    <tr 
-                      key={insumo.id} 
-                      className={`border-b transition-colors ${
-                        theme === 'dark' 
-                          ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' 
-                          : 'bg-white border-slate-200 hover:bg-slate-50'
-                      }`}
+                  <tr key={insumo.id} className={isDark ? STYLES.trDark : STYLES.trLight}>
+                    <td className={isDark ? STYLES.tdPrimaryDark : STYLES.tdPrimaryLight}>{insumo.nombre}</td>
+                    <td className={isDark ? STYLES.tdMonoDark : STYLES.tdMonoLight}>{insumo.codigo}</td>
+                    <td className={isDark ? STYLES.tdDark : STYLES.tdLight}>{insumo.grupo_prestacion}</td>
+                    <td className={isDark ? STYLES.tdDark : STYLES.tdLight}>{insumo.proveedor || '—'}</td>
+                    <td
+                      className={isDark ? STYLES.tdFonasaDark : STYLES.tdFonasaLight}
+                      title={insumo.grupos_fonasa ? `Cirugías grupo(s): ${insumo.grupos_fonasa}` : 'Todas las cirugías'}
                     >
-                      <td className={`py-3 px-4 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{insumo.nombre}</td>
-                      <td className={`py-3 px-4 font-mono ${theme === 'dark' ? 'text-slate-100' : 'text-gray-700'}`}>{insumo.codigo}</td>
-                      <td className={`py-3 px-4 ${theme === 'dark' ? 'text-slate-100' : 'text-gray-700'}`}>{insumo.grupo_prestacion}</td>
-                      <td className={`py-3 px-4 ${theme === 'dark' ? 'text-slate-100' : 'text-gray-700'}`}>{insumo.proveedor || '—'}</td>
-                      <td className={`py-3 px-4 font-mono text-sm ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'}`} title={insumo.grupos_fonasa ? `Cirugías grupo(s): ${insumo.grupos_fonasa}` : 'Todas las cirugías'}>
-                        {insumo.grupos_fonasa || '—'}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => iniciarEdicion(insumo)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded"
-                          >
-                            <Edit className="w-5 h-5" />
-                          </button>
-                          <button
-                            onClick={() => handleEliminar(insumo)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded"
-                            disabled={eliminarInsumo.isPending}
-                            title="Eliminar insumo"
-                          >
-                            {eliminarInsumo.isPending ? (
-                              <LoadingSpinner size="sm" />
-                            ) : (
-                              <Trash2 className="w-5 h-5" />
-                            )}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                      {insumo.grupos_fonasa || '—'}
+                    </td>
+                    <td className={STYLES.tdActions}>
+                      <div className={STYLES.actionsCell}>
+                        <button onClick={() => iniciarEdicion(insumo)} className={STYLES.editBtn}>
+                          <Edit className={STYLES.iconMd} />
+                        </button>
+                        <button
+                          onClick={() => handleEliminar(insumo)}
+                          className={STYLES.deleteBtn}
+                          disabled={eliminarInsumo.isPending}
+                          title="Eliminar insumo"
+                        >
+                          {eliminarInsumo.isPending ? <LoadingSpinner size="sm" /> : <Trash2 className={STYLES.iconMd} />}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
                 ))
               )}
             </tbody>
           </table>
         </div>
-        
+
         {insumos.length > itemsPerPage && (
           <Pagination
             currentPage={currentPage}
@@ -546,13 +579,9 @@ export default function Insumos() {
         )}
       </div>
 
-      {/* Modal de Confirmación */}
       <ConfirmModal
         isOpen={showConfirmEliminar}
-        onClose={() => {
-          setShowConfirmEliminar(false)
-          setInsumoAEliminar(null)
-        }}
+        onClose={() => { setShowConfirmEliminar(false); setInsumoAEliminar(null) }}
         onConfirm={confirmarEliminar}
         title="Eliminar Insumo"
         message={insumoAEliminar ? `¿Estás seguro de eliminar el insumo "${insumoAEliminar.nombre}"?\n\nCódigo: ${insumoAEliminar.codigo}\nGrupo: ${insumoAEliminar.grupo_prestacion}` : ''}

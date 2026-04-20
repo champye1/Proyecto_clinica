@@ -1,6 +1,24 @@
 import { useState, useRef, useEffect } from 'react'
 import { ChevronDown, Search, X } from 'lucide-react'
 
+// ─── Estilos ──────────────────────────────────────────────────────────────────
+const STYLES = {
+  selectedText:  'truncate',
+  iconRow:       'flex items-center gap-2',
+  clearIcon:     'w-4 h-4 text-slate-400 hover:text-slate-600',
+  dropdown:      'absolute z-50 w-full mt-2 bg-white border-2 border-slate-200 rounded-2xl shadow-xl max-h-80 overflow-hidden',
+  searchWrap:    'p-3 border-b border-slate-100',
+  searchInner:   'relative',
+  searchIcon:    'absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4',
+  searchInput:   'w-full bg-slate-50 border-2 border-slate-100 rounded-xl py-2 pl-10 pr-4 focus:border-blue-500 focus:bg-white transition-all outline-none text-sm font-bold text-slate-700',
+  listWrap:      'overflow-y-auto max-h-64 custom-scrollbar',
+  emptyMsg:      'p-4 text-center text-sm text-slate-400',
+  optionCode:    'font-bold text-slate-700 text-sm',
+  optionGroup:   'text-xs text-blue-500 mt-1',
+  optionDesc:    'text-xs text-slate-400 mt-1',
+  hiddenInput:   'hidden',
+}
+
 export default function SearchableSelect({ 
   options, 
   value, 
@@ -73,16 +91,16 @@ export default function SearchableSelect({
           !value ? 'text-slate-400' : 'text-slate-700'
         }`}
       >
-        <span className="truncate">
+        <span className={STYLES.selectedText}>
           {selectedOption 
             ? getDisplayText(selectedOption)
             : placeholder
           }
         </span>
-        <div className="flex items-center gap-2">
+        <div className={STYLES.iconRow}>
           {value && (
-            <X 
-              className="w-4 h-4 text-slate-400 hover:text-slate-600" 
+            <X
+              className={STYLES.clearIcon}
               onClick={handleClear}
             />
           )}
@@ -95,17 +113,17 @@ export default function SearchableSelect({
       </div>
 
       {isOpen && (
-        <div className="absolute z-50 w-full mt-2 bg-white border-2 border-slate-200 rounded-2xl shadow-xl max-h-80 overflow-hidden">
+        <div className={STYLES.dropdown}>
           {/* Campo de búsqueda */}
-          <div className="p-3 border-b border-slate-100">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+          <div className={STYLES.searchWrap}>
+            <div className={STYLES.searchInner}>
+              <Search className={STYLES.searchIcon} />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Buscar por código o nombre..."
-                className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl py-2 pl-10 pr-4 focus:border-blue-500 focus:bg-white transition-all outline-none text-sm font-bold text-slate-700"
+                className={STYLES.searchInput}
                 autoFocus
                 onClick={(e) => e.stopPropagation()}
               />
@@ -113,9 +131,9 @@ export default function SearchableSelect({
           </div>
 
           {/* Lista de opciones */}
-          <div className="overflow-y-auto max-h-64 custom-scrollbar">
+          <div className={STYLES.listWrap}>
             {filteredOptions.length === 0 ? (
-              <div className="p-4 text-center text-sm text-slate-400">
+              <div className={STYLES.emptyMsg}>
                 No se encontraron resultados
               </div>
             ) : (
@@ -128,7 +146,7 @@ export default function SearchableSelect({
                   }`}
                 >
                   {option.codigo && (
-                    <div className="font-bold text-slate-700 text-sm">
+                    <div className={STYLES.optionCode}>
                       {option.codigo}
                     </div>
                   )}
@@ -136,12 +154,12 @@ export default function SearchableSelect({
                     {option.nombre}
                   </div>
                   {option.grupo_prestacion && (
-                    <div className="text-xs text-blue-500 mt-1">
+                    <div className={STYLES.optionGroup}>
                       {option.grupo_prestacion}
                     </div>
                   )}
                   {option.descripcion && (
-                    <div className="text-xs text-slate-400 mt-1">
+                    <div className={STYLES.optionDesc}>
                       {option.descripcion}
                     </div>
                   )}
@@ -155,7 +173,7 @@ export default function SearchableSelect({
       {required && !value && (
         <input
           type="text"
-          className="hidden"
+          className={STYLES.hiddenInput}
           required
           value={value}
           onChange={() => {}}

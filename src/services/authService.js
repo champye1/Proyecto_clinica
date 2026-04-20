@@ -2,8 +2,9 @@
  * Servicio de autenticación.
  * Centraliza todas las operaciones de Supabase Auth y la tabla users/doctors.
  */
-import { supabase } from '../config/supabase'
-import { logger } from '../utils/logger'
+import { supabase } from '@/config/supabase'
+import { logger } from '@/utils/logger'
+import { clearClinicaIdCache } from '@/utils/getClinicaId'
 
 /**
  * Obtiene el usuario autenticado actual (valida con el servidor).
@@ -38,9 +39,9 @@ export async function getUserRole(userId) {
 
   if (error) {
     logger.errorWithContext('authService.getUserRole', error, { userId })
-    return { role: null, error }
+    return { role: null, suspended: false, error }
   }
-  return { role: data?.role ?? null, error: null }
+  return { role: data?.role ?? null, suspended: false, error: null }
 }
 
 /**
@@ -77,7 +78,7 @@ export async function resolveUsernameToEmail(username) {
 export async function verifyUserExists(userId) {
   const { data: userData, error } = await supabase
     .from('users')
-    .select('role')
+    .select('role, clinica_id')
     .eq('id', userId)
     .maybeSingle()
 
@@ -110,6 +111,7 @@ export async function verifyDoctorAccess(userId) {
  * @returns {Promise<{error: object|null}>}
  */
 export async function signOut() {
+  clearClinicaIdCache()
   const { error } = await supabase.auth.signOut()
   return { error }
 }

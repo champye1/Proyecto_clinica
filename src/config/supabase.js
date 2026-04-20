@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { logger } from '../utils/logger'
+import { logger } from '@/utils/logger'
 
 // IMPORTANTE: Reemplazar con tus credenciales de Supabase
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://tu-proyecto.supabase.co'

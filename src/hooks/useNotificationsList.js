@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '../config/supabase'
-import { logger } from '../utils/logger'
+import { supabase } from '@/config/supabase'
+import { logger } from '@/utils/logger'
 
 /**
  * Hook para obtener la lista de notificaciones del usuario y marcarlas como leídas.
@@ -38,8 +38,8 @@ export function useNotificationsList(userId, options = {}) {
       if (error) throw error
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['notifications', userId])
-      queryClient.invalidateQueries(['unread-notifications-count', userId])
+      queryClient.invalidateQueries({ queryKey: ['notifications', userId] })
+      queryClient.invalidateQueries({ queryKey: ['unread-notifications-count', userId] })
     },
   })
 
@@ -53,8 +53,8 @@ export function useNotificationsList(userId, options = {}) {
       if (error) throw error
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['notifications', userId])
-      queryClient.invalidateQueries(['unread-notifications-count', userId])
+      queryClient.invalidateQueries({ queryKey: ['notifications', userId] })
+      queryClient.invalidateQueries({ queryKey: ['unread-notifications-count', userId] })
     },
   })
 

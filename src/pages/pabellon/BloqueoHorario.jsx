@@ -1,17 +1,87 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '../../config/supabase'
+import { supabase } from '@/config/supabase'
 import { Calendar, Clock, Users, X, Edit, CheckCircle, XCircle, Lock } from 'lucide-react'
-import { useNotifications } from '../../hooks/useNotifications'
-import { sanitizeString, sanitizeNumber } from '../../utils/sanitizeInput'
-import { HORAS_SELECT } from '../../utils/horasOpciones'
-import Pagination from '../../components/common/Pagination'
+import { useNotifications } from '@/hooks/useNotifications'
+import { sanitizeString, sanitizeNumber } from '@/utils/sanitizeInput'
+import { HORAS_SELECT } from '@/utils/horasOpciones'
+import Pagination from '@/components/common/Pagination'
 
 const HORAS_PARA_PREVIEW = HORAS_SELECT
-import ConfirmModal from '../../components/common/ConfirmModal'
-import LoadingSpinner from '../../components/common/LoadingSpinner'
+import ConfirmModal from '@/components/common/ConfirmModal'
+import LoadingSpinner from '@/components/common/LoadingSpinner'
 import { format } from 'date-fns'
-import { useTheme } from '../../contexts/ThemeContext'
+import { useTheme } from '@/contexts/ThemeContext'
+
+// ─── Estilos ──────────────────────────────────────────────────────────────────
+const STYLES = {
+  page:                'space-y-6',
+  titleDark:           'text-3xl font-bold text-white',
+  titleLight:          'text-3xl font-bold text-gray-900',
+  twoColGrid:          'grid grid-cols-1 lg:grid-cols-2 gap-6',
+  formHeader:          'flex justify-between items-center mb-4',
+  formTitleDark:       'text-xl font-bold text-white',
+  formTitleLight:      'text-xl font-bold text-gray-900',
+  cancelBtnDark:       'text-sm text-slate-300 hover:text-white',
+  cancelBtnLight:      'text-sm text-gray-600 hover:text-gray-800',
+  dateHintDark:        'text-xs mt-1 text-slate-400',
+  dateHintLight:       'text-xs mt-1 text-gray-500',
+  scheduleGridDark:    'rounded-xl border-2 p-4 bg-slate-800/50 border-slate-600',
+  scheduleGridLight:   'rounded-xl border-2 p-4 bg-slate-50 border-slate-200',
+  scheduleGridTitle:   'text-sm font-bold mb-3 flex items-center gap-2',
+  scheduleGridTitleDark: 'text-sm font-bold mb-3 flex items-center gap-2 text-white',
+  scheduleGridTitleLight:'text-sm font-bold mb-3 flex items-center gap-2 text-gray-900',
+  scheduleTags:        'flex flex-wrap gap-2',
+  scheduleTagFree:     'inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold',
+  scheduleTagFreeDark: 'bg-green-900/50 text-green-300 border border-green-600/50',
+  scheduleTagFreeLight:'bg-green-100 text-green-800 border border-green-300',
+  scheduleTagOccDark:  'bg-red-900/50 text-red-300 border border-red-600/50',
+  scheduleTagOccLight: 'bg-red-100 text-red-800 border border-red-300',
+  scheduleTagBlkDark:  'bg-amber-900/50 text-amber-300 border border-amber-600/50',
+  scheduleTagBlkLight: 'bg-amber-100 text-amber-800 border border-amber-300',
+  scheduleLegendDark:  'text-xs mt-2 text-slate-400',
+  scheduleLegendLight: 'text-xs mt-2 text-gray-600',
+  formGrid2:           'grid grid-cols-2 gap-4',
+  horaHintDark:        'text-xs mt-0.5 text-slate-400',
+  horaHintLight:       'text-xs mt-0.5 text-gray-500',
+  charCountDark:       'text-xs mt-1 text-slate-300',
+  charCountLight:      'text-xs mt-1 text-gray-500',
+  vigenciaHintDark:    'text-xs mt-1 text-slate-200',
+  vigenciaHintLight:   'text-xs mt-1 text-gray-600',
+  submitBtn:           'btn-primary w-full',
+  submitSpinner:       'flex items-center justify-center gap-2',
+  listTitleDark:       'text-xl font-bold mb-4 text-white',
+  listTitleLight:      'text-xl font-bold mb-4 text-gray-900',
+  listSpace:           'space-y-3',
+  listEmptyDark:       'text-center py-4 text-slate-300',
+  listEmptyLight:      'text-center py-4 text-gray-500',
+  itemDark:            'border rounded-lg p-4 border-slate-700',
+  itemLight:           'border rounded-lg p-4 border-slate-200',
+  itemRow:             'flex justify-between items-start',
+  itemContent:         'min-w-0 flex-1',
+  itemNameDark:        'font-medium text-white',
+  itemNameLight:       'font-medium text-gray-900',
+  itemMetaDark:        'text-sm mt-1 text-slate-200',
+  itemMetaLight:       'text-sm mt-1 text-gray-700',
+  itemAccentDark:      'font-medium text-blue-300',
+  itemAccentLight:     'font-medium text-blue-600',
+  itemDoctorDark:      'text-sm mt-1 text-slate-300',
+  itemDoctorLight:     'text-sm mt-1 text-gray-600',
+  itemVigDark:         'text-xs mt-1 text-slate-400',
+  itemVigLight:        'text-xs mt-1 text-gray-500',
+  itemActions:         'flex gap-2',
+  editBtn:             'p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors',
+  deleteBtn:           'p-2 text-red-600 hover:bg-red-50 rounded transition-colors',
+  formCard:            'card',
+  listCard:            'card',
+  formBody:            'space-y-4',
+  formLabel:           'label-field',
+  formInput:           'input-field',
+  formInputFull:       'input-field w-full',
+  iconSm:              'w-4 h-4',
+  iconMd:              'w-5 h-5',
+  iconXs:              'w-3.5 h-3.5',
+}
 
 export default function BloqueoHorario() {
   const [formData, setFormData] = useState({
@@ -141,8 +211,8 @@ export default function BloqueoHorario() {
       if (error) throw error
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['bloqueos'])
-      queryClient.invalidateQueries(['cirugias-validacion'])
+      queryClient.invalidateQueries({ queryKey: ['bloqueos'] })
+      queryClient.invalidateQueries({ queryKey: ['cirugias-validacion'] })
       queryClient.invalidateQueries({ queryKey: ['calendario-anual-bloqueos'] })
       queryClient.invalidateQueries({ queryKey: ['ocupacion-hoy'] })
       setFormData({
@@ -177,8 +247,8 @@ export default function BloqueoHorario() {
       if (error) throw error
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['bloqueos'])
-      queryClient.invalidateQueries(['cirugias-validacion'])
+      queryClient.invalidateQueries({ queryKey: ['bloqueos'] })
+      queryClient.invalidateQueries({ queryKey: ['cirugias-validacion'] })
       queryClient.invalidateQueries({ queryKey: ['calendario-anual-bloqueos'] })
       queryClient.invalidateQueries({ queryKey: ['ocupacion-hoy'] })
       setFormData({
@@ -213,8 +283,8 @@ export default function BloqueoHorario() {
       if (error) throw error
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['bloqueos'])
-      queryClient.invalidateQueries(['cirugias-validacion'])
+      queryClient.invalidateQueries({ queryKey: ['bloqueos'] })
+      queryClient.invalidateQueries({ queryKey: ['cirugias-validacion'] })
       queryClient.invalidateQueries({ queryKey: ['calendario-anual-bloqueos'] })
       queryClient.invalidateQueries({ queryKey: ['ocupacion-hoy'] })
       showSuccess('Bloqueo eliminado exitosamente')
@@ -367,34 +437,36 @@ export default function BloqueoHorario() {
     })
   }
 
-  return (
-    <div className="space-y-6">
-      <h1 className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Bloqueo de Horario</h1>
+  const isDark = theme === 'dark'
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  return (
+    <div className={STYLES.page}>
+      <h1 className={isDark ? STYLES.titleDark : STYLES.titleLight}>Bloqueo de Horario</h1>
+
+      <div className={STYLES.twoColGrid}>
         {/* Formulario */}
-        <div className="card">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+        <div className={STYLES.formCard}>
+          <div className={STYLES.formHeader}>
+            <h2 className={isDark ? STYLES.formTitleDark : STYLES.formTitleLight}>
               {bloqueoEditando ? 'Editar Bloqueo' : 'Crear Bloqueo'}
             </h2>
             {bloqueoEditando && (
               <button
                 type="button"
                 onClick={cancelarEdicion}
-                className={`text-sm ${theme === 'dark' ? 'text-slate-300 hover:text-white' : 'text-gray-600 hover:text-gray-800'}`}
+                className={isDark ? STYLES.cancelBtnDark : STYLES.cancelBtnLight}
               >
                 Cancelar edición
               </button>
             )}
           </div>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className={STYLES.formBody}>
             <div>
-              <label className="label-field">Doctor (Opcional)</label>
+              <label className={STYLES.formLabel}>Doctor (Opcional)</label>
               <select
                 value={formData.doctor_id}
                 onChange={(e) => setFormData({ ...formData, doctor_id: sanitizeString(e.target.value) })}
-                className="input-field"
+                className={STYLES.formInput}
               >
                 <option value="">Seleccionar doctor...</option>
                 {doctores.map(doctor => (
@@ -406,11 +478,11 @@ export default function BloqueoHorario() {
             </div>
 
             <div>
-              <label className="label-field">Pabellón *</label>
+              <label className={STYLES.formLabel}>Pabellón *</label>
               <select
                 value={formData.operating_room_id}
                 onChange={(e) => setFormData({ ...formData, operating_room_id: sanitizeString(e.target.value) })}
-                className="input-field"
+                className={STYLES.formInput}
                 required
               >
                 <option value="">Seleccionar pabellón...</option>
@@ -423,69 +495,62 @@ export default function BloqueoHorario() {
             </div>
 
             <div>
-              <label className="label-field">Fecha *</label>
+              <label className={STYLES.formLabel}>Fecha *</label>
               <input
                 type="date"
                 value={formData.fecha}
                 onChange={(e) => setFormData({ ...formData, fecha: sanitizeString(e.target.value) })}
-                className="input-field w-full"
+                className={STYLES.formInputFull}
                 required
                 min={new Date().toISOString().split('T')[0]}
               />
-              <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>
+              <p className={isDark ? STYLES.dateHintDark : STYLES.dateHintLight}>
                 Elija fecha y pabellón para ver abajo los horarios disponibles u ocupados.
               </p>
             </div>
 
             {/* Horarios del día: solo se muestra cuando hay fecha y pabellón */}
             {formData.fecha && formData.operating_room_id && (
-              <div className={`rounded-xl border-2 p-4 ${theme === 'dark' ? 'bg-slate-800/50 border-slate-600' : 'bg-slate-50 border-slate-200'}`}>
-                <h3 className={`text-sm font-bold mb-3 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                  <Clock className="w-4 h-4" />
+              <div className={isDark ? STYLES.scheduleGridDark : STYLES.scheduleGridLight}>
+                <h3 className={isDark ? STYLES.scheduleGridTitleDark : STYLES.scheduleGridTitleLight}>
+                  <Clock className={STYLES.iconSm} />
                   Horarios del día ({formData.fecha}) — {pabellones.find(p => p.id === formData.operating_room_id)?.nombre || 'Pabellón'}
                 </h3>
-                <div className="flex flex-wrap gap-2">
+                <div className={STYLES.scheduleTags}>
                   {HORAS_PARA_PREVIEW.map(h => {
                     const estado = estadoPorHora[h] || 'libre'
+                    const tagColor = estado === 'libre'
+                      ? (isDark ? STYLES.scheduleTagFreeDark : STYLES.scheduleTagFreeLight)
+                      : estado === 'ocupado'
+                      ? (isDark ? STYLES.scheduleTagOccDark : STYLES.scheduleTagOccLight)
+                      : (isDark ? STYLES.scheduleTagBlkDark : STYLES.scheduleTagBlkLight)
                     return (
                       <span
                         key={h}
-                        className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold ${
-                          estado === 'libre'
-                            ? theme === 'dark'
-                              ? 'bg-green-900/50 text-green-300 border border-green-600/50'
-                              : 'bg-green-100 text-green-800 border border-green-300'
-                            : estado === 'ocupado'
-                            ? theme === 'dark'
-                              ? 'bg-red-900/50 text-red-300 border border-red-600/50'
-                              : 'bg-red-100 text-red-800 border border-red-300'
-                            : theme === 'dark'
-                            ? 'bg-amber-900/50 text-amber-300 border border-amber-600/50'
-                            : 'bg-amber-100 text-amber-800 border border-amber-300'
-                        }`}
+                        className={`${STYLES.scheduleTagFree} ${tagColor}`}
                         title={estado === 'libre' ? 'Disponible para bloquear' : estado === 'ocupado' ? 'Ocupado por cirugía' : 'Ya bloqueado'}
                       >
-                        {estado === 'libre' && <CheckCircle className="w-3.5 h-3.5" />}
-                        {estado === 'ocupado' && <XCircle className="w-3.5 h-3.5" />}
-                        {estado === 'bloqueado' && <Lock className="w-3.5 h-3.5" />}
+                        {estado === 'libre' && <CheckCircle className={STYLES.iconXs} />}
+                        {estado === 'ocupado' && <XCircle className={STYLES.iconXs} />}
+                        {estado === 'bloqueado' && <Lock className={STYLES.iconXs} />}
                         {h}
                       </span>
                     )
                   })}
                 </div>
-                <p className={`text-xs mt-2 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>
+                <p className={isDark ? STYLES.scheduleLegendDark : STYLES.scheduleLegendLight}>
                   Verde = disponible · Rojo = ocupado (cirugía) · Amarillo = ya bloqueado. Elija Hora Inicio y Hora Fin entre las verdes.
                 </p>
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className={STYLES.formGrid2}>
               <div>
-                <label className="label-field">Hora Inicio *</label>
+                <label className={STYLES.formLabel}>Hora Inicio *</label>
                 <select
                   value={formData.hora_inicio ? String(formData.hora_inicio).slice(0, 5) : ''}
                   onChange={(e) => setFormData({ ...formData, hora_inicio: e.target.value })}
-                  className="input-field w-full"
+                  className={STYLES.formInputFull}
                   required
                 >
                   <option value="">Seleccione hora</option>
@@ -493,14 +558,14 @@ export default function BloqueoHorario() {
                     <option key={h} value={h}>{h}</option>
                   ))}
                 </select>
-                <p className={`text-xs mt-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Solo hora (sin minutos)</p>
+                <p className={isDark ? STYLES.horaHintDark : STYLES.horaHintLight}>Solo hora (sin minutos)</p>
               </div>
               <div>
-                <label className="label-field">Hora Fin *</label>
+                <label className={STYLES.formLabel}>Hora Fin *</label>
                 <select
                   value={formData.hora_fin ? String(formData.hora_fin).slice(0, 5) : ''}
                   onChange={(e) => setFormData({ ...formData, hora_fin: e.target.value })}
-                  className="input-field w-full"
+                  className={STYLES.formInputFull}
                   required
                 >
                   <option value="">Seleccione hora</option>
@@ -508,47 +573,47 @@ export default function BloqueoHorario() {
                     <option key={h} value={h}>{h}</option>
                   ))}
                 </select>
-                <p className={`text-xs mt-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>Solo hora (sin minutos)</p>
+                <p className={isDark ? STYLES.horaHintDark : STYLES.horaHintLight}>Solo hora (sin minutos)</p>
               </div>
             </div>
 
             <div>
-              <label className="label-field">Motivo</label>
+              <label className={STYLES.formLabel}>Motivo</label>
               <textarea
                 value={formData.motivo}
                 onChange={(e) => setFormData({ ...formData, motivo: sanitizeString(e.target.value) })}
-                className="input-field"
+                className={STYLES.formInput}
                 rows="3"
                 maxLength={500}
               />
-              <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-500'}`}>
+              <p className={isDark ? STYLES.charCountDark : STYLES.charCountLight}>
                 {formData.motivo.length}/500 caracteres
               </p>
             </div>
 
             <div>
-              <label className="label-field">Días límite de vigencia (Opcional)</label>
+              <label className={STYLES.formLabel}>Días límite de vigencia (Opcional)</label>
               <input
                 type="number"
                 min={1}
                 max={365}
                 value={formData.dias_limite_vigencia}
                 onChange={(e) => setFormData({ ...formData, dias_limite_vigencia: sanitizeNumber(e.target.value).slice(0, 3) })}
-                className="input-field"
+                className={STYLES.formInput}
                 placeholder="Ej: 5"
               />
-              <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-slate-200' : 'text-gray-600'}`}>
+              <p className={isDark ? STYLES.vigenciaHintDark : STYLES.vigenciaHintLight}>
                 Ejemplo: si pones 5, el bloqueo dura 5 días desde la fecha del bloqueo y luego se libera si no se llenó. Puedes usar cualquier número (5, 15, etc.). Vacío = permanente hasta liberación manual.
               </p>
             </div>
 
-            <button 
-              type="submit" 
-              className="btn-primary w-full"
+            <button
+              type="submit"
+              className={STYLES.submitBtn}
               disabled={crearBloqueo.isPending || actualizarBloqueo.isPending}
             >
               {crearBloqueo.isPending || actualizarBloqueo.isPending ? (
-                <span className="flex items-center justify-center gap-2">
+                <span className={STYLES.submitSpinner}>
                   <LoadingSpinner size="sm" />
                   {bloqueoEditando ? 'Actualizando...' : 'Creando...'}
                 </span>
@@ -560,59 +625,59 @@ export default function BloqueoHorario() {
         </div>
 
         {/* Lista de bloqueos */}
-        <div className="card">
-          <h2 className={`text-xl font-bold mb-4 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Bloqueos Activos</h2>
-          <div className="space-y-3">
+        <div className={STYLES.listCard}>
+          <h2 className={isDark ? STYLES.listTitleDark : STYLES.listTitleLight}>Bloqueos Activos</h2>
+          <div className={STYLES.listSpace}>
             {bloqueos.length === 0 ? (
-              <p className={`text-center py-4 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-500'}`}>No hay bloqueos activos</p>
+              <p className={isDark ? STYLES.listEmptyDark : STYLES.listEmptyLight}>No hay bloqueos activos</p>
             ) : (
               bloqueosPaginados.map(bloqueo => (
-                <div key={bloqueo.id} className={`border rounded-lg p-4 ${theme === 'dark' ? 'border-slate-700' : 'border-slate-200'}`}>
-                  <div className="flex justify-between items-start">
-                    <div className="min-w-0 flex-1">
-                      <p className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{bloqueo.operating_rooms?.nombre}</p>
-                      <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>
-                        <span className={`font-medium ${theme === 'dark' ? 'text-blue-300' : 'text-blue-600'}`}>Inicio:</span> {bloqueo.fecha} · {bloqueo.hora_inicio} - {bloqueo.hora_fin}
+                <div key={bloqueo.id} className={isDark ? STYLES.itemDark : STYLES.itemLight}>
+                  <div className={STYLES.itemRow}>
+                    <div className={STYLES.itemContent}>
+                      <p className={isDark ? STYLES.itemNameDark : STYLES.itemNameLight}>{bloqueo.operating_rooms?.nombre}</p>
+                      <p className={isDark ? STYLES.itemMetaDark : STYLES.itemMetaLight}>
+                        <span className={isDark ? STYLES.itemAccentDark : STYLES.itemAccentLight}>Inicio:</span> {bloqueo.fecha} · {bloqueo.hora_inicio} - {bloqueo.hora_fin}
                       </p>
-                      <p className={`text-sm mt-0.5 ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>
-                        <span className={`font-medium ${theme === 'dark' ? 'text-blue-300' : 'text-blue-600'}`}>Fin:</span>{' '}
+                      <p className={isDark ? STYLES.itemMetaDark : STYLES.itemMetaLight}>
+                        <span className={isDark ? STYLES.itemAccentDark : STYLES.itemAccentLight}>Fin:</span>{' '}
                         {bloqueo.fecha_auto_liberacion || bloqueo.vigencia_hasta
                           ? (bloqueo.fecha_auto_liberacion || bloqueo.vigencia_hasta)
                           : 'Permanente (hasta liberación manual)'}
                       </p>
                       {bloqueo.doctors && (
-                        <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-600'}`}>
+                        <p className={isDark ? STYLES.itemDoctorDark : STYLES.itemDoctorLight}>
                           Dr. {bloqueo.doctors.nombre} {bloqueo.doctors.apellido}
                         </p>
                       )}
                       {bloqueo.motivo && (
-                        <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-slate-200' : 'text-gray-600'}`}>{bloqueo.motivo}</p>
+                        <p className={isDark ? STYLES.itemMetaDark : STYLES.itemMetaLight}>{bloqueo.motivo}</p>
                       )}
                       {bloqueo.dias_auto_liberacion != null && (
-                        <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-500'}`}>
+                        <p className={isDark ? STYLES.itemVigDark : STYLES.itemVigLight}>
                           Vigencia: {bloqueo.dias_auto_liberacion} día(s) desde el inicio
                         </p>
                       )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className={STYLES.itemActions}>
                       <button
                         onClick={() => iniciarEdicion(bloqueo)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        className={STYLES.editBtn}
                         disabled={crearBloqueo.isPending || actualizarBloqueo.isPending}
                         title="Editar bloqueo"
                       >
-                        <Edit className="w-5 h-5" />
+                        <Edit className={STYLES.iconMd} />
                       </button>
                       <button
                         onClick={() => handleEliminar(bloqueo)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                        className={STYLES.deleteBtn}
                         disabled={eliminarBloqueo.isPending || crearBloqueo.isPending || actualizarBloqueo.isPending}
                         title="Eliminar bloqueo"
                       >
                         {eliminarBloqueo.isPending ? (
                           <LoadingSpinner size="sm" />
                         ) : (
-                          <X className="w-5 h-5" />
+                          <X className={STYLES.iconMd} />
                         )}
                       </button>
                     </div>

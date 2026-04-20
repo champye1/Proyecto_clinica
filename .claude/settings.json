@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sed -i 's|className=\"flex items-center gap-2 text-\\\\[10px\\\\] font-black uppercase tracking-\\\\[0.2em\\\\] text-slate-400 mb-6\"|className={STYLES_BC.nav}|g' src/pages/doctor/Calendario.jsx)",
+      "Bash(sed -i 's|className=\"text-slate-300\"|className={STYLES_BC.sep}|g' src/pages/doctor/Calendario.jsx)",
+      "Bash(sed -i 's|className=\"text-slate-900\"|className={STYLES_BC.current}|g' src/pages/doctor/Calendario.jsx)",
+      "mcp__claude_ai_Supabase__execute_sql"
+    ]
+  }
+}

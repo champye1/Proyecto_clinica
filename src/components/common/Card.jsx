@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import { motion } from 'framer-motion'
-import { useTheme } from '../../contexts/ThemeContext'
-import { tc } from '../../constants/theme'
+import { useTheme } from '@/contexts/ThemeContext'
+import { tc } from '@/constants/theme'
 
 /**
  * Tarjeta con animación de entrada y soporte multi-tema.

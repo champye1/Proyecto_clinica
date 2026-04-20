@@ -1,10 +1,37 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '../config/supabase'
+import { supabase } from '@/config/supabase'
 import { Calendar, CheckCircle, XCircle, Lock, FileCheck } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import LoadingSpinner from './common/LoadingSpinner'
+import { logger } from '@/utils/logger'
+
+// ─── Estilos ──────────────────────────────────────────────────────────────────
+const STYLES = {
+  wrapper:        'space-y-4',
+  headerRow:      'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4',
+  filtersRow:     'flex flex-wrap items-center gap-3',
+  filterGroup:    'flex items-center gap-2',
+  legendRow:      'flex items-center gap-2',
+  legendDotGreen: 'w-6 h-6 rounded bg-green-500/80',
+  legendDotBlue:  'w-6 h-6 rounded bg-blue-500/80',
+  legendDotSlate: 'w-6 h-6 rounded bg-slate-400/80',
+  legendDotAmber: 'w-6 h-6 rounded bg-amber-500/80',
+  loadingWrap:    'flex justify-center py-12',
+  overflowX:      'overflow-x-auto',
+  tdCell:         'p-1',
+  slotSelectedRow:'flex items-center justify-center gap-1',
+  checkIcon:      'w-4 h-4',
+  slotSaved:      'w-full min-h-[48px] py-2 rounded-xl text-xs flex items-center justify-center gap-1 bg-blue-500/80 text-white border-2 border-blue-400/50',
+  fileCheckIcon:  'w-4 h-4 shrink-0',
+  slotIcon:       'w-4 h-4',
+  hiddenSm:       'hidden sm:inline',
+  confirmBtn:     'px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold',
+  altBtn:         'px-4 py-2 rounded-lg border border-blue-600 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-900/30 text-sm font-semibold',
+  flexEnd:        'flex justify-end',
+  slotAvailTxt:   'opacity-80',
+}
 
 const HORAS = []
 for (let i = 8; i <= 23; i++) {
@@ -65,7 +92,7 @@ export default function CalendarioPabellonesGrid({ theme, inlineMode = false, on
       const { data, error } = await supabase.rpc('get_estado_slots_pabellon', { p_fecha: fecha })
       if (error) {
         // Si la función RPC no existe (404) o falla, no bloquear: mostrar slots vacíos y permitir crear reserva
-        console.warn('get_estado_slots_pabellon:', error.message)
+        logger.warn('get_estado_slots_pabellon: ' + error.message)
         return []
       }
       return data || []
@@ -166,13 +193,13 @@ export default function CalendarioPabellonesGrid({ theme, inlineMode = false, on
   }, [pabellonesList, pabellonFiltroId])
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className={STYLES.wrapper}>
+      <div className={STYLES.headerRow}>
         <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
           Horarios disponibles por pabellón
         </h3>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
+        <div className={STYLES.filtersRow}>
+          <div className={STYLES.filterGroup}>
             <Calendar className={`w-5 h-5 ${isDark ? 'text-slate-400' : 'text-gray-500'}`} />
             <label className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
               {primerHorario ? 'Día del 2º horario:' : 'Día:'}
@@ -185,7 +212,7 @@ export default function CalendarioPabellonesGrid({ theme, inlineMode = false, on
               className={`input-field w-auto ${isDark ? 'bg-slate-800 border-slate-600 text-white' : ''}`}
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className={STYLES.filterGroup}>
             <label className={`text-sm whitespace-nowrap ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>
               Pabellón:
             </label>
@@ -224,21 +251,21 @@ export default function CalendarioPabellonesGrid({ theme, inlineMode = false, on
       </p>
 
       <div className={`flex flex-wrap gap-4 text-sm ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
-        <span className="flex items-center gap-2"><span className="w-6 h-6 rounded bg-green-500/80" /> Disponible</span>
-        <span className="flex items-center gap-2"><span className="w-6 h-6 rounded bg-blue-500/80" /> Solicitud guardada</span>
-        <span className="flex items-center gap-2"><span className="w-6 h-6 rounded bg-slate-400/80" /> Ocupado</span>
-        <span className="flex items-center gap-2"><span className="w-6 h-6 rounded bg-amber-500/80" /> Bloqueado</span>
+        <span className={STYLES.filterGroup}><span className={STYLES.legendDotGreen} /> Disponible</span>
+        <span className={STYLES.filterGroup}><span className={STYLES.legendDotBlue} /> Solicitud guardada</span>
+        <span className={STYLES.filterGroup}><span className={STYLES.legendDotSlate} /> Ocupado</span>
+        <span className={STYLES.filterGroup}><span className={STYLES.legendDotAmber} /> Bloqueado</span>
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-12"><LoadingSpinner /></div>
+        <div className={STYLES.loadingWrap}><LoadingSpinner /></div>
       ) : !hayPabellones ? (
         <div className={`rounded-xl border p-8 text-center ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-gray-600'}`}>
           No hay pabellones activos.
         </div>
       ) : (
         <div className={`rounded-xl border overflow-hidden ${isDark ? 'bg-slate-800/50 border-slate-600' : 'bg-white border-slate-200'}`}>
-          <div className="overflow-x-auto">
+          <div className={STYLES.overflowX}>
             <table className={`w-full border-collapse ${pabellonesMostrar.length === 1 ? 'min-w-0' : 'min-w-[500px]'}`} role="grid" aria-label="Vista detallada del día por pabellón">
               <thead>
                 <tr className={isDark ? 'border-b border-slate-600 bg-slate-800' : 'border-b border-slate-200 bg-slate-50'}>
@@ -264,7 +291,7 @@ export default function CalendarioPabellonesGrid({ theme, inlineMode = false, on
                       const isLibre = estado === 'libre'
                       const isSolicitado = estado === 'solicitado'
                       return (
-                        <td key={p.id} className="p-1">
+                        <td key={p.id} className={STYLES.tdCell}>
                           {isLibre ? (
                             <button
                               type="button"
@@ -275,16 +302,16 @@ export default function CalendarioPabellonesGrid({ theme, inlineMode = false, on
                                   : isDark ? 'bg-slate-700/50 border-slate-600 text-slate-200 hover:border-green-500 hover:bg-green-500/20' : 'bg-slate-50 border-slate-200 text-gray-700 hover:border-green-500 hover:bg-green-50'
                               }`}
                             >
-                              {isSlotSelected(p.id, hora) ? <span className="flex items-center justify-center gap-1"><CheckCircle className="w-4 h-4" /> ✓</span> : <span className="opacity-80">Disponible</span>}
+                              {isSlotSelected(p.id, hora) ? <span className={STYLES.slotSelectedRow}><CheckCircle className={STYLES.checkIcon} /> ✓</span> : <span className={STYLES.slotAvailTxt}>Disponible</span>}
                             </button>
                           ) : isSolicitado ? (
-                            <div className="w-full min-h-[48px] py-2 rounded-xl text-xs flex items-center justify-center gap-1 bg-blue-500/80 text-white border-2 border-blue-400/50">
-                              <FileCheck className="w-4 h-4 shrink-0" /> <span className="hidden sm:inline">Solicitado</span>
+                            <div className={STYLES.slotSaved}>
+                              <FileCheck className={STYLES.fileCheckIcon} /> <span className={STYLES.hiddenSm}>Solicitado</span>
                             </div>
                           ) : (
                             <div className={`w-full min-h-[48px] py-2 rounded-xl text-xs flex items-center justify-center gap-1 ${estado === 'bloqueado' ? 'bg-amber-500/80 text-white border-2 border-amber-400/50' : 'bg-slate-400/80 text-white border-2 border-slate-500/50'}`}>
-                              {estado === 'bloqueado' ? <Lock className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                              <span className="hidden sm:inline">{estado === 'bloqueado' ? 'Bloqueado' : 'Ocupado'}</span>
+                              {estado === 'bloqueado' ? <Lock className={STYLES.slotIcon} /> : <XCircle className={STYLES.slotIcon} />}
+                              <span className={STYLES.hiddenSm}>{estado === 'bloqueado' ? 'Bloqueado' : 'Ocupado'}</span>
                             </div>
                           )}
                         </td>
@@ -303,11 +330,11 @@ export default function CalendarioPabellonesGrid({ theme, inlineMode = false, on
           <span className={`font-medium ${isDark ? 'text-slate-200' : 'text-gray-800'}`}>
             {primerHorario ? `2º horario: ${horariosAgrupados[0]?.nombre} ${horariosAgrupados[0]?.horaInicio}–${horariosAgrupados[0]?.horaFin} (${formatFechaSafe(fecha, 'd/M/yyyy')})` : horariosAgrupados.length >= 2 ? `2 horarios: ${horariosAgrupados[0].nombre} ${horariosAgrupados[0].horaInicio}–${horariosAgrupados[0].horaFin} y ${horariosAgrupados[1].nombre} ${horariosAgrupados[1].horaInicio}–${horariosAgrupados[1].horaFin}` : '1 horario seleccionado'}
           </span>
-          <button type="button" onClick={handleConfirm} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold">
+          <button type="button" onClick={handleConfirm} className={STYLES.confirmBtn}>
             {inlineMode ? (primerHorario || horariosAgrupados.length >= 2 ? 'Usar estos 2 horarios' : 'Usar este horario') : (primerHorario || horariosAgrupados.length >= 2 ? 'Crear solicitud con estos 2 horarios' : 'Crear solicitud con este horario')}
           </button>
           {!primerHorario && horariosAgrupados.length >= 1 && (
-            <button type="button" onClick={fijarPrimerHorarioYElegirSegundo} className="px-4 py-2 rounded-lg border border-blue-600 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-900/30 text-sm font-semibold">
+            <button type="button" onClick={fijarPrimerHorarioYElegirSegundo} className={STYLES.altBtn}>
               Usar como 1º y elegir 2º (otro día)
             </button>
           )}
@@ -318,7 +345,7 @@ export default function CalendarioPabellonesGrid({ theme, inlineMode = false, on
       )}
 
       {inlineMode && onCerrar && (
-        <div className="flex justify-end">
+        <div className={STYLES.flexEnd}>
           <button type="button" onClick={onCerrar} className={`text-sm underline ${isDark ? 'text-slate-400 hover:text-slate-200' : 'text-gray-600 hover:text-gray-800'}`}>
             Cerrar y volver al formulario
           </button>

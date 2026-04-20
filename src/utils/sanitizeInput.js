@@ -215,6 +215,22 @@ export function sanitizeCode(input) {
 }
 
 /**
+ * Parsea un string JSON de forma segura sin lanzar excepciones.
+ * Útil para leer datos de localStorage / sessionStorage donde el formato puede ser inválido.
+ * @param {string|null} str - String a parsear
+ * @param {*} fallback - Valor a retornar si el parse falla (por defecto null)
+ * @returns {*} - Objeto parseado o fallback
+ */
+export function safeParseJSON(str, fallback = null) {
+  if (!str || typeof str !== 'string') return fallback
+  try {
+    return JSON.parse(str)
+  } catch {
+    return fallback
+  }
+}
+
+/**
  * Sanitiza un campo de contraseña: elimina scripts, eventos y caracteres de control
  * (p. ej. null byte), sin escapar caracteres especiales para no alterar la contraseña.
  * @param {string} input - String a sanitizar

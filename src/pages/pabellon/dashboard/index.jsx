@@ -1,17 +1,58 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../../../config/supabase'
+import { supabase } from '@/config/supabase'
 import { format, subDays } from 'date-fns'
-import { Inbox, PhoneCall } from 'lucide-react'
-import { useTheme } from '../../../contexts/ThemeContext'
+import { Inbox, PhoneCall, Download } from 'lucide-react'
+import { useTheme } from '@/contexts/ThemeContext'
 import { es } from 'date-fns/locale'
-import Modal from '../../../components/common/Modal'
+import Modal from '@/components/common/Modal'
+// exportExcel se carga dinámicamente al hacer clic para no bloquear el bundle inicial
+const lazyExport = (args) =>
+  import('../../../utils/exportExcel').then(m => m.exportDashboardReport(args))
 
 import DashboardMetrics from './DashboardMetrics'
 import DashboardChart from './DashboardChart'
 import DashboardReminders from './DashboardReminders'
 import DashboardPendingRequests from './DashboardPendingRequests'
+
+// ─── Estilos ──────────────────────────────────────────────────────────────────
+const STYLES = {
+  page:               'animate-in fade-in slide-in-from-bottom-4 duration-500',
+  header:             'flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 sm:gap-0 mb-6 sm:mb-8 lg:mb-10',
+  titleDark:          'text-xl sm:text-2xl lg:text-3xl font-black tracking-tighter uppercase text-white',
+  titleLight:         'text-xl sm:text-2xl lg:text-3xl font-black tracking-tighter uppercase text-slate-900',
+  subtitle:           'font-bold text-[10px] sm:text-xs uppercase tracking-widest mt-1 text-slate-400',
+  headerBtnDark:      'px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-bold text-[10px] sm:text-xs uppercase flex items-center gap-2 shadow-sm transition-all touch-manipulation active:scale-95 w-full sm:w-auto border bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700',
+  headerBtnMedical:   'px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-bold text-[10px] sm:text-xs uppercase flex items-center gap-2 shadow-sm transition-all touch-manipulation active:scale-95 w-full sm:w-auto border bg-white border-blue-200 text-slate-700 hover:bg-blue-50',
+  headerBtnLight:     'px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-bold text-[10px] sm:text-xs uppercase flex items-center gap-2 shadow-sm transition-all touch-manipulation active:scale-95 w-full sm:w-auto border bg-white border-slate-200 text-slate-700 hover:bg-slate-50',
+  bannerDark:         'mb-6 sm:mb-8 rounded-2xl border-2 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-orange-950/40 border-orange-700 text-orange-100',
+  bannerLight:        'mb-6 sm:mb-8 rounded-2xl border-2 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-orange-50 border-orange-400 text-orange-900',
+  bannerIconDark:     'flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center bg-orange-700/50',
+  bannerIconLight:    'flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center bg-orange-100',
+  bannerContent:      'flex-1 min-w-0',
+  bannerTitle:        'font-black text-sm sm:text-base uppercase tracking-tight',
+  bannerSubDark:      'text-xs sm:text-sm font-semibold mt-1 text-orange-300',
+  bannerSubLight:     'text-xs sm:text-sm font-semibold mt-1 text-orange-700',
+  bannerListDark:     'mt-2 space-y-0.5 text-orange-200',
+  bannerListLight:    'mt-2 space-y-0.5 text-orange-800',
+  bannerListItem:     'text-xs font-medium truncate',
+  bannerListMore:     'text-xs font-bold',
+  inboxIcon:          'sm:w-4 sm:h-4',
+  fontSemibold:       'font-semibold',
+  bannerActions:      'flex flex-col sm:flex-row gap-2 flex-shrink-0 w-full sm:w-auto',
+  bannerViewBtn:      'px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-black text-xs uppercase rounded-xl transition-colors touch-manipulation w-full sm:w-auto',
+  bannerMarkDark:     'px-3 py-2 font-black text-xs uppercase rounded-xl transition-colors touch-manipulation w-full sm:w-auto bg-orange-900/50 hover:bg-orange-900 text-orange-300',
+  bannerMarkLight:    'px-3 py-2 font-black text-xs uppercase rounded-xl transition-colors touch-manipulation w-full sm:w-auto bg-orange-100 hover:bg-orange-200 text-orange-700',
+  bottomGrid:         'grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 min-h-[400px] sm:min-h-[450px] lg:h-[500px]',
+  modalList:          'space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar',
+  modalEmpty:         'text-sm text-slate-500 font-bold',
+  modalItem:          'border border-slate-200 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2',
+  modalItemName:      'text-sm font-bold text-slate-900 truncate',
+  modalItemMeta:      'text-xs font-semibold text-slate-500 mt-0.5',
+  modalItemEstado:    'text-[11px] text-slate-500 mt-0.5',
+  modalItemContent:   'min-w-0',
+}
 
 export default function Dashboard() {
   const { theme } = useTheme()
@@ -179,73 +220,67 @@ export default function Dashboard() {
 
   const isLoading = isLoadingOcupacion || isLoadingSolicitudes
 
+  const headerBtnClass = isDark ? STYLES.headerBtnDark : theme === 'medical' ? STYLES.headerBtnMedical : STYLES.headerBtnLight
+
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className={STYLES.page}>
       {/* Cabecera */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 sm:gap-0 mb-6 sm:mb-8 lg:mb-10">
+      <div className={STYLES.header}>
         <div>
-          <h2 className={`text-xl sm:text-2xl lg:text-3xl font-black tracking-tighter uppercase ${
-            isDark ? 'text-white' : 'text-slate-900'
-          }`}>Panel Administrativo</h2>
-          <p className="font-bold text-[10px] sm:text-xs uppercase tracking-widest mt-1 text-slate-400">
+          <h2 className={isDark ? STYLES.titleDark : STYLES.titleLight}>Panel Administrativo</h2>
+          <p className={STYLES.subtitle}>
             Gestión Clínica • {format(new Date(), 'MMMM yyyy', { locale: es })}
           </p>
         </div>
-        <button
-          onClick={() => navigate('/pabellon/solicitudes')}
-          className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-bold text-[10px] sm:text-xs uppercase flex items-center gap-2 shadow-sm transition-all touch-manipulation active:scale-95 w-full sm:w-auto border ${
-            isDark
-              ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
-              : theme === 'medical'
-                ? 'bg-white border-blue-200 text-slate-700 hover:bg-blue-50'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-          }`}
-        >
-          <Inbox size={14} className="sm:w-4 sm:h-4" aria-hidden="true" /> Solicitudes
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => lazyExport({
+              cirugiasHoy,
+              solicitudesPendientes,
+              ocupacion,
+              tiempoPromedio: tiempoPromedioCirugia,
+              tasaUtilizacion,
+            })}
+            className={headerBtnClass}
+            title="Exportar reporte a Excel"
+          >
+            <Download size={14} aria-hidden="true" /> Exportar
+          </button>
+          <button onClick={() => navigate('/pabellon/solicitudes')} className={headerBtnClass}>
+            <Inbox size={14} className={STYLES.inboxIcon} aria-hidden="true" /> Solicitudes
+          </button>
+        </div>
       </div>
 
       {/* Banner órdenes sin agendar */}
       {ordenesNotificaciones.length > 0 && (
-        <div className={`mb-6 sm:mb-8 rounded-2xl border-2 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4 ${
-          isDark ? 'bg-orange-950/40 border-orange-700 text-orange-100' : 'bg-orange-50 border-orange-400 text-orange-900'
-        }`} role="alert">
-          <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${
-            isDark ? 'bg-orange-700/50' : 'bg-orange-100'
-          }`}>
+        <div className={isDark ? STYLES.bannerDark : STYLES.bannerLight} role="alert">
+          <div className={isDark ? STYLES.bannerIconDark : STYLES.bannerIconLight}>
             <PhoneCall size={20} className={isDark ? 'text-orange-300' : 'text-orange-600'} aria-hidden="true" />
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-black text-sm sm:text-base uppercase tracking-tight">
+          <div className={STYLES.bannerContent}>
+            <p className={STYLES.bannerTitle}>
               {ordenesNotificaciones.length === 1
                 ? '1 paciente con orden de hospitalización sin agendar'
                 : `${ordenesNotificaciones.length} pacientes con orden de hospitalización sin agendar`}
             </p>
-            <p className={`text-xs sm:text-sm font-semibold mt-1 ${isDark ? 'text-orange-300' : 'text-orange-700'}`}>
+            <p className={isDark ? STYLES.bannerSubDark : STYLES.bannerSubLight}>
               Contactar al médico para ofrecer horas disponibles
             </p>
-            <ul className={`mt-2 space-y-0.5 ${isDark ? 'text-orange-200' : 'text-orange-800'}`}>
+            <ul className={isDark ? STYLES.bannerListDark : STYLES.bannerListLight}>
               {ordenesNotificaciones.slice(0, 3).map(n => (
-                <li key={n.id} className="text-xs font-medium truncate">• {n.mensaje}</li>
+                <li key={n.id} className={STYLES.bannerListItem}>• {n.mensaje}</li>
               ))}
               {ordenesNotificaciones.length > 3 && (
-                <li className="text-xs font-bold">+ {ordenesNotificaciones.length - 3} más...</li>
+                <li className={STYLES.bannerListMore}>+ {ordenesNotificaciones.length - 3} más...</li>
               )}
             </ul>
           </div>
-          <div className="flex flex-col sm:flex-row gap-2 flex-shrink-0 w-full sm:w-auto">
-            <button
-              onClick={() => { marcarOrdenesVistas(); navigate('/pabellon/solicitudes') }}
-              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-black text-xs uppercase rounded-xl transition-colors touch-manipulation w-full sm:w-auto"
-            >
+          <div className={STYLES.bannerActions}>
+            <button onClick={() => { marcarOrdenesVistas(); navigate('/pabellon/solicitudes') }} className={STYLES.bannerViewBtn}>
               Ver solicitudes
             </button>
-            <button
-              onClick={marcarOrdenesVistas}
-              className={`px-3 py-2 font-black text-xs uppercase rounded-xl transition-colors touch-manipulation w-full sm:w-auto ${
-                isDark ? 'bg-orange-900/50 hover:bg-orange-900 text-orange-300' : 'bg-orange-100 hover:bg-orange-200 text-orange-700'
-              }`}
-            >
+            <button onClick={marcarOrdenesVistas} className={isDark ? STYLES.bannerMarkDark : STYLES.bannerMarkLight}>
               Marcar vistas
             </button>
           </div>
@@ -271,41 +306,23 @@ export default function Dashboard() {
       />
 
       {/* Panel inferior: solicitudes + recordatorios */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 min-h-[400px] sm:min-h-[450px] lg:h-[500px]">
-        <DashboardPendingRequests
-          solicitudes={solicitudesPendientes}
-          isLoading={isLoadingSolicitudes}
-        />
+      <div className={STYLES.bottomGrid}>
+        <DashboardPendingRequests solicitudes={solicitudesPendientes} isLoading={isLoadingSolicitudes} />
         <DashboardReminders />
       </div>
 
       {/* Modal cirugías de hoy */}
-      <Modal
-        isOpen={showCirugiasHoyModal}
-        onClose={() => setShowCirugiasHoyModal(false)}
-        title="Cirugías programadas para hoy"
-      >
-        <div className="space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar">
+      <Modal isOpen={showCirugiasHoyModal} onClose={() => setShowCirugiasHoyModal(false)} title="Cirugías programadas para hoy">
+        <div className={STYLES.modalList}>
           {cirugiasHoy.length === 0 ? (
-            <p className="text-sm text-slate-500 font-bold" role="status">
-              No hay cirugías programadas para el día de hoy.
-            </p>
+            <p className={STYLES.modalEmpty} role="status">No hay cirugías programadas para el día de hoy.</p>
           ) : (
             cirugiasHoy.map((cirugia) => (
-              <div
-                key={cirugia.id}
-                className="border border-slate-200 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-slate-900 truncate">
-                    {cirugia.patients?.nombre} {cirugia.patients?.apellido}
-                  </p>
-                  <p className="text-xs font-semibold text-slate-500 mt-0.5">
-                    {cirugia.operating_rooms?.nombre || 'Pabellón'} • {cirugia.hora_inicio}–{cirugia.hora_fin}
-                  </p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Estado: <span className="font-semibold">{cirugia.estado}</span>
-                  </p>
+              <div key={cirugia.id} className={STYLES.modalItem}>
+                <div className={STYLES.modalItemContent}>
+                  <p className={STYLES.modalItemName}>{cirugia.patients?.nombre} {cirugia.patients?.apellido}</p>
+                  <p className={STYLES.modalItemMeta}>{cirugia.operating_rooms?.nombre || 'Pabellón'} • {cirugia.hora_inicio}–{cirugia.hora_fin}</p>
+                  <p className={STYLES.modalItemEstado}>Estado: <span className={STYLES.fontSemibold}>{cirugia.estado}</span></p>
                 </div>
               </div>
             ))

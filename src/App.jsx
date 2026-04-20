@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { logger } from './utils/logger'
 import { SESSION_KEYS } from './constants/sessionKeys'
 import {
@@ -9,16 +9,27 @@ import {
   onAuthStateChange,
 } from './services/authService'
 import LoadingSpinner from './components/common/LoadingSpinner'
+import InstallBanner from './components/common/InstallBanner'
+import { ROLES } from './constants/roles'
 
 // Lazy loading de todas las páginas — reduce el bundle inicial
-const Inicio              = lazy(() => import('./pages/auth/Inicio'))
+const Landing             = lazy(() => import('./pages/public/Landing'))
+const Login               = lazy(() => import('./pages/auth/Login'))
 const LoginPabellon       = lazy(() => import('./pages/auth/LoginPabellon'))
 const LoginDoctor         = lazy(() => import('./pages/auth/LoginDoctor'))
 const RecuperarContraseña = lazy(() => import('./pages/auth/RecuperarContraseña'))
 const RestablecerContraseña = lazy(() => import('./pages/auth/RestablecerContraseña'))
+const SetupAdmin          = lazy(() => import('./pages/auth/SetupAdmin'))
 const ContactoExterno     = lazy(() => import('./pages/public/ContactoExterno'))
 const PabellonLayout      = lazy(() => import('./layouts/PabellonLayout'))
 const DoctorLayout        = lazy(() => import('./layouts/DoctorLayout'))
+const AdminLayout         = lazy(() => import('./layouts/AdminLayout'))
+// Onboarding
+const Registro            = lazy(() => import('./pages/onboarding/Registro'))
+const ConfirmarEmail      = lazy(() => import('./pages/onboarding/ConfirmarEmail'))
+const RegistroInvitacion  = lazy(() => import('./pages/onboarding/RegistroInvitacion'))
+const ElegirPlan          = lazy(() => import('./pages/onboarding/ElegirPlan'))
+const Bienvenida          = lazy(() => import('./pages/onboarding/Bienvenida'))
 
 // Detecta si el error es por token de refresco inválido (sesión antigua/revocada)
 function isInvalidRefreshTokenError(error) {
@@ -29,7 +40,6 @@ function isInvalidRefreshTokenError(error) {
 }
 
 function AppContent() {
-  const location = useLocation()
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [userRole, setUserRole] = useState(null)
@@ -69,7 +79,7 @@ function AppContent() {
     }
     initAuth()
 
-    const unsubscribe = onAuthStateChange((event, session) => {
+    const unsubscribe = onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
       if (session?.user) {
         fetchUserRole(session.user.id)
@@ -130,10 +140,12 @@ function AppContent() {
         <Route
           path="/"
           element={
-            user && userRole ? (
-              <Navigate to={userRole === 'pabellon' ? '/pabellon' : '/doctor'} replace />
+            user && userRole === ROLES.SUPER_ADMIN ? (
+              <Navigate to="/admin" replace />
+            ) : user && userRole ? (
+              <Navigate to={userRole === ROLES.DOCTOR ? '/doctor' : '/pabellon'} replace />
             ) : (
-              <Inicio />
+              <Landing />
             )
           }
         />
@@ -141,9 +153,9 @@ function AppContent() {
         <Route
           path="/login/pabellon"
           element={
-            user && userRole === 'pabellon' ? (
+            user && userRole === ROLES.PABELLON ? (
               <Navigate to="/pabellon" />
-            ) : user && userRole === 'doctor' ? (
+            ) : user && userRole === ROLES.DOCTOR ? (
               <LoginPabellon />
             ) : user ? (
               <Navigate to="/" />
@@ -156,9 +168,9 @@ function AppContent() {
         <Route
           path="/login/doctor"
           element={
-            user && userRole === 'doctor' ? (
+            user && userRole === ROLES.DOCTOR ? (
               <Navigate to="/doctor" />
-            ) : user && userRole === 'pabellon' ? (
+            ) : user && userRole === ROLES.PABELLON ? (
               <LoginDoctor />
             ) : user ? (
               <Navigate to="/" />
@@ -168,14 +180,39 @@ function AppContent() {
           }
         />
 
+        <Route
+          path="/acceso"
+          element={
+            user && userRole ? (
+              <Navigate to={userRole === ROLES.DOCTOR ? '/doctor' : userRole === ROLES.SUPER_ADMIN ? '/admin' : '/pabellon'} replace />
+            ) : (
+              <Login />
+            )
+          }
+        />
+
         <Route path="/recuperar-contrasena" element={<RecuperarContraseña />} />
         <Route path="/restablecer-contrasena" element={<RestablecerContraseña />} />
         <Route path="/contacto" element={<ContactoExterno />} />
+        <Route path="/setup-admin" element={<SetupAdmin />} />
+
+        {/* Onboarding — accesible sin rol asignado aún */}
+        <Route path="/registro" element={<Registro />} />
+        <Route path="/onboarding/confirmar" element={<ConfirmarEmail />} />
+        <Route path="/registro/invitacion" element={<RegistroInvitacion />} />
+        <Route
+          path="/elegir-plan"
+          element={user ? <ElegirPlan /> : <Navigate to="/registro" replace />}
+        />
+        <Route
+          path="/bienvenida"
+          element={user ? <Bienvenida /> : <Navigate to="/registro" replace />}
+        />
 
         <Route
           path="/pabellon/*"
           element={
-            user && userRole === 'pabellon' && !sessionStorage.getItem(SESSION_KEYS.VALIDATING_LOGIN) ? (
+            user && (userRole === ROLES.PABELLON || userRole === ROLES.ADMIN_CLINICA) && !sessionStorage.getItem(SESSION_KEYS.VALIDATING_LOGIN) ? (
               <PabellonLayout />
             ) : user && sessionStorage.getItem(SESSION_KEYS.VALIDATING_LOGIN) ? (
               <LoadingSpinner />
@@ -190,7 +227,7 @@ function AppContent() {
         <Route
           path="/doctor/*"
           element={
-            user && userRole === 'doctor' && !sessionStorage.getItem(SESSION_KEYS.VALIDATING_LOGIN) ? (
+            user && userRole === ROLES.DOCTOR && !sessionStorage.getItem(SESSION_KEYS.VALIDATING_LOGIN) ? (
               <DoctorLayout />
             ) : user && sessionStorage.getItem(SESSION_KEYS.VALIDATING_LOGIN) ? (
               <LoadingSpinner />
@@ -201,7 +238,21 @@ function AppContent() {
             )
           }
         />
+
+        <Route
+          path="/admin/*"
+          element={
+            user && userRole === ROLES.SUPER_ADMIN ? (
+              <AdminLayout />
+            ) : user ? (
+              <Navigate to="/" replace />
+            ) : (
+              <Navigate to="/login/pabellon" replace />
+            )
+          }
+        />
       </Routes>
+      <InstallBanner />
     </Suspense>
   )
 }

@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '../config/supabase'
-import { logger } from '../utils/logger'
+import { supabase } from '@/config/supabase'
+import { logger } from '@/utils/logger'
 import { useNotifications } from './useNotifications'
 
 /**

@@ -1,5 +1,5 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { useTheme } from '../../contexts/ThemeContext'
+import { useTheme } from '@/contexts/ThemeContext'
 
 export default function OcupacionChart({ data, mode = 'porcentaje' }) {
   const { theme } = useTheme()

@@ -213,7 +213,7 @@ serve(async (req) => {
     // Verificar que el usuario tiene rol de pabellon
     const { data: userData, error: userError } = await supabaseAdmin
       .from('users')
-      .select('role')
+      .select('role, clinica_id')
       .eq('id', user.id)
       .single()
 
@@ -225,13 +225,15 @@ serve(async (req) => {
       )
     }
 
-    if (userData.role !== 'pabellon') {
+    if (userData.role !== 'pabellon' && userData.role !== 'admin_clinica') {
       return jsonResponse(
         { success: false, error: 'No autorizado. Solo usuarios de Pabellón pueden crear médicos.' },
         403,
         corsHeaders
       )
     }
+
+    const clinicaId = userData.clinica_id
 
     let nombre = asString(body.nombre)
     let apellido = asString(body.apellido)
@@ -475,6 +477,7 @@ serve(async (req) => {
         id: userId,
         email: userEmail,
         role: 'doctor',
+        clinica_id: clinicaId,
         ...(username ? { username: username.toLowerCase().trim() } : {}),
       })
       .select('id')
@@ -536,6 +539,7 @@ serve(async (req) => {
         especialidad,
         estado,
         acceso_web_enabled: acceso_web_enabled || false,
+        clinica_id: clinicaId,
       })
       .select()
       .single()

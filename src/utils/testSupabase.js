@@ -1,5 +1,5 @@
 // Utilidad para probar la conexión con Supabase
-import { supabase } from '../config/supabase'
+import { supabase } from '@/config/supabase'
 
 export async function testSupabaseConnection() {
   try {

@@ -2,12 +2,49 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, CheckCircle2, Trash2, MessageSquare } from 'lucide-react'
 import { format } from 'date-fns'
-import { supabase } from '../../../config/supabase'
-import Card from '../../../components/common/Card'
-import { useNotifications } from '../../../hooks/useNotifications'
-import { useTheme } from '../../../contexts/ThemeContext'
-import { sanitizeString } from '../../../utils/sanitizeInput'
-import { logger } from '../../../utils/logger'
+import { supabase } from '@/config/supabase'
+import Card from '@/components/common/Card'
+import { useNotifications } from '@/hooks/useNotifications'
+import { useTheme } from '@/contexts/ThemeContext'
+import { sanitizeString, safeParseJSON } from '@/utils/sanitizeInput'
+import { logger } from '@/utils/logger'
+
+// ─── Estilos ──────────────────────────────────────────────────────────────────
+const STYLES = {
+  cardDark:         'flex flex-col relative overflow-hidden border bg-slate-900 text-white border-slate-800',
+  cardLight:        'flex flex-col relative overflow-hidden border bg-white text-slate-900 border-slate-200',
+  titleDark:        'font-black uppercase text-[9px] sm:text-[10px] mb-4 sm:mb-6 flex items-center gap-2 relative z-10 text-blue-400',
+  titleLight:       'font-black uppercase text-[9px] sm:text-[10px] mb-4 sm:mb-6 flex items-center gap-2 relative z-10 text-blue-600',
+  list:             'flex-1 space-y-3 sm:space-y-4 overflow-y-auto custom-scrollbar mb-4 sm:mb-6 relative z-10',
+  emptyDark:        'text-center py-4 text-[10px] sm:text-xs font-bold uppercase text-slate-400',
+  emptyLight:       'text-center py-4 text-[10px] sm:text-xs font-bold uppercase text-slate-500',
+  recCardBase:      'p-3 sm:p-4 rounded-xl sm:rounded-2xl border',
+  recDoneLight:     'bg-green-50 border-green-200',
+  recDoneDark:      'bg-green-900/20 border-green-500/40',
+  recPendingLight:  'bg-slate-50 border-slate-200',
+  recPendingDark:   'bg-white/5 border-white/10',
+  recTextDark:      'text-[10px] sm:text-xs font-medium mb-2 sm:mb-3 break-words text-slate-100',
+  recTextLight:     'text-[10px] sm:text-xs font-medium mb-2 sm:mb-3 break-words text-slate-800',
+  recFooter:        'flex justify-between items-center gap-2 flex-wrap',
+  recMetaDark:      'flex-1 min-w-0 text-[8px] sm:text-[9px] font-black uppercase text-blue-400',
+  recMetaLight:     'flex-1 min-w-0 text-[8px] sm:text-[9px] font-black uppercase text-blue-600',
+  recActions:       'flex items-center gap-1',
+  doneBtn:          'p-1.5 sm:p-2 rounded-lg bg-green-600 hover:bg-green-700 text-white transition-all touch-manipulation disabled:opacity-50',
+  deleteBtn:        'p-1.5 sm:p-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-all touch-manipulation disabled:opacity-50',
+  formWrap:         'relative z-10',
+  form:             'space-y-2 sm:space-y-3',
+  textareaDark:     'w-full rounded-xl sm:rounded-2xl p-2.5 sm:p-3 text-[10px] sm:text-xs outline-none h-14 sm:h-16 resize-none font-bold touch-manipulation border bg-slate-800/50 border-slate-700 text-white placeholder-slate-500 focus:border-blue-500',
+  textareaLight:    'w-full rounded-xl sm:rounded-2xl p-2.5 sm:p-3 text-[10px] sm:text-xs outline-none h-14 sm:h-16 resize-none font-bold touch-manipulation border bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white',
+  charCount:        'text-[8px] sm:text-[9px] font-black text-slate-500',
+  submitBtn:        'bg-blue-600 text-white p-1.5 sm:p-2 rounded-lg sm:rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 transition-all touch-manipulation active:scale-95',
+  formFooter:       'flex justify-between items-center',
+  recMetaInner:     'truncate',
+  recMetaTime:      'ml-2 flex-shrink-0',
+  msgIcon:          'sm:w-[14px] sm:h-[14px]',
+  checkIcon:        'sm:w-4 sm:h-4',
+  trashIcon:        'sm:w-4 sm:h-4',
+  plusIcon:         'sm:w-4 sm:h-4',
+}
 
 /**
  * Muro de recordatorios del Dashboard de Pabellón.
@@ -23,7 +60,7 @@ export default function DashboardReminders() {
   const [nuevoRecordatorio, setNuevoRecordatorio] = useState(() => {
     try {
       const guardado = localStorage.getItem('recordatorio-temporal')
-      if (guardado) return JSON.parse(guardado)
+      if (guardado) return safeParseJSON(guardado) ?? { titulo: '', contenido: '' }
     } catch (e) {
       logger.errorWithContext('Error al cargar recordatorio temporal', e)
     }
@@ -68,7 +105,7 @@ export default function DashboardReminders() {
       if (error) throw error
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['recordatorios-pabellon'])
+      queryClient.invalidateQueries({ queryKey: ['recordatorios-pabellon'] })
       setNuevoRecordatorio({ titulo: '', contenido: '' })
       localStorage.removeItem('recordatorio-temporal')
       showSuccess('Recordatorio creado exitosamente')
@@ -89,7 +126,7 @@ export default function DashboardReminders() {
       if (error) throw error
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['recordatorios-pabellon'])
+      queryClient.invalidateQueries({ queryKey: ['recordatorios-pabellon'] })
       showSuccess('Recordatorio marcado como realizado')
     },
     onError: () => showError('Error al marcar recordatorio'),
@@ -104,7 +141,7 @@ export default function DashboardReminders() {
       if (error) throw error
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['recordatorios-pabellon'])
+      queryClient.invalidateQueries({ queryKey: ['recordatorios-pabellon'] })
       showSuccess('Recordatorio eliminado')
     },
     onError: () => showError('Error al eliminar recordatorio'),
@@ -121,77 +158,63 @@ export default function DashboardReminders() {
   }
 
   return (
-    <Card
-      className={`flex flex-col relative overflow-hidden border ${
-        isDarkOrMedical ? 'bg-slate-900 text-white border-slate-800' : 'bg-white text-slate-900 border-slate-200'
-      }`}
-    >
-      <h3 className={`font-black uppercase text-[9px] sm:text-[10px] mb-4 sm:mb-6 flex items-center gap-2 relative z-10 ${
-        isDarkOrMedical ? 'text-blue-400' : 'text-blue-600'
-      }`}>
-        <MessageSquare size={12} className="sm:w-[14px] sm:h-[14px]" aria-hidden="true" />
+    <Card className={isDarkOrMedical ? STYLES.cardDark : STYLES.cardLight}>
+      <h3 className={isDarkOrMedical ? STYLES.titleDark : STYLES.titleLight}>
+        <MessageSquare size={12} className={STYLES.msgIcon} aria-hidden="true" />
         Muro de Recordatorios
       </h3>
 
-      <div className="flex-1 space-y-3 sm:space-y-4 overflow-y-auto custom-scrollbar mb-4 sm:mb-6 relative z-10">
+      <div className={STYLES.list}>
         {recordatorios.length === 0 ? (
-          <p className={`text-center py-4 text-[10px] sm:text-xs font-bold uppercase ${
-            isDarkOrMedical ? 'text-slate-400' : 'text-slate-500'
-          }`} role="status">
+          <p className={isDarkOrMedical ? STYLES.emptyDark : STYLES.emptyLight} role="status">
             No hay recordatorios
           </p>
         ) : (
-          recordatorios.map((rec) => (
-            <div
-              key={rec.id}
-              className={`p-3 sm:p-4 rounded-xl sm:rounded-2xl border ${
-                rec.visto
-                  ? (isDarkOrMedical ? 'bg-green-900/20 border-green-500/40' : 'bg-green-50 border-green-200')
-                  : (isDarkOrMedical ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200')
-              }`}
-            >
-              <p className={`text-[10px] sm:text-xs font-medium mb-2 sm:mb-3 break-words ${
-                isDarkOrMedical ? 'text-slate-100' : 'text-slate-800'
-              } ${rec.visto ? 'line-through opacity-80' : ''}`}>
-                "{rec.contenido}"
-              </p>
-              <div className="flex justify-between items-center gap-2 flex-wrap">
-                <div className={`flex-1 min-w-0 text-[8px] sm:text-[9px] font-black uppercase ${
-                  isDarkOrMedical ? 'text-blue-400' : 'text-blue-600'
-                }`}>
-                  <span className="truncate">{rec.titulo}</span>
-                  <span className="ml-2 flex-shrink-0">{format(new Date(rec.created_at), 'dd/MM HH:mm')}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  {!rec.visto && (
+          recordatorios.map((rec) => {
+            const recCardClass = rec.visto
+              ? (isDarkOrMedical ? STYLES.recDoneDark : STYLES.recDoneLight)
+              : (isDarkOrMedical ? STYLES.recPendingDark : STYLES.recPendingLight)
+            return (
+              <div key={rec.id} className={`${STYLES.recCardBase} ${recCardClass}`}>
+                <p className={`${isDarkOrMedical ? STYLES.recTextDark : STYLES.recTextLight} ${rec.visto ? 'line-through opacity-80' : ''}`}>
+                  "{rec.contenido}"
+                </p>
+                <div className={STYLES.recFooter}>
+                  <div className={isDarkOrMedical ? STYLES.recMetaDark : STYLES.recMetaLight}>
+                    <span className={STYLES.recMetaInner}>{rec.titulo}</span>
+                    <span className={STYLES.recMetaTime}>{format(new Date(rec.created_at), 'dd/MM HH:mm')}</span>
+                  </div>
+                  <div className={STYLES.recActions}>
+                    {!rec.visto && (
+                      <button
+                        type="button"
+                        onClick={() => marcarVisto.mutate(rec.id)}
+                        disabled={marcarVisto.isPending}
+                        className={STYLES.doneBtn}
+                        aria-label="Marcar como realizado"
+                      >
+                        <CheckCircle2 size={14} className={STYLES.checkIcon} />
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => marcarVisto.mutate(rec.id)}
-                      disabled={marcarVisto.isPending}
-                      className="p-1.5 sm:p-2 rounded-lg bg-green-600 hover:bg-green-700 text-white transition-all touch-manipulation disabled:opacity-50"
-                      aria-label="Marcar como realizado"
+                      onClick={() => eliminar.mutate(rec.id)}
+                      disabled={eliminar.isPending}
+                      className={STYLES.deleteBtn}
+                      aria-label="Eliminar recordatorio"
                     >
-                      <CheckCircle2 size={14} className="sm:w-4 sm:h-4" />
+                      <Trash2 size={14} className={STYLES.trashIcon} />
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => eliminar.mutate(rec.id)}
-                    disabled={eliminar.isPending}
-                    className="p-1.5 sm:p-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-all touch-manipulation disabled:opacity-50"
-                    aria-label="Eliminar recordatorio"
-                  >
-                    <Trash2 size={14} className="sm:w-4 sm:h-4" />
-                  </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            )
+          })
         )}
       </div>
 
-      <div className="relative z-10">
-        <form onSubmit={handleCrear} className="space-y-2 sm:space-y-3">
+      <div className={STYLES.formWrap}>
+        <form onSubmit={handleCrear} className={STYLES.form}>
           <textarea
             placeholder="Recordatorio..."
             value={nuevoRecordatorio.contenido}
@@ -207,23 +230,17 @@ export default function DashboardReminders() {
               }
             }}
             aria-label="Nuevo recordatorio"
-            className={`w-full rounded-xl sm:rounded-2xl p-2.5 sm:p-3 text-[10px] sm:text-xs outline-none h-14 sm:h-16 resize-none font-bold touch-manipulation border ${
-              isDarkOrMedical
-                ? 'bg-slate-800/50 border-slate-700 text-white placeholder-slate-500 focus:border-blue-500'
-                : 'bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:bg-white'
-            }`}
+            className={isDarkOrMedical ? STYLES.textareaDark : STYLES.textareaLight}
           />
-          <div className="flex justify-between items-center">
-            <span className="text-[8px] sm:text-[9px] font-black text-slate-500">
-              {nuevoRecordatorio.contenido.length}/150
-            </span>
+          <div className={STYLES.formFooter}>
+            <span className={STYLES.charCount}>{nuevoRecordatorio.contenido.length}/150</span>
             <button
               type="submit"
               disabled={!nuevoRecordatorio.contenido.trim()}
               aria-label="Crear recordatorio"
-              className="bg-blue-600 text-white p-1.5 sm:p-2 rounded-lg sm:rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 transition-all touch-manipulation active:scale-95"
+              className={STYLES.submitBtn}
             >
-              <Plus size={14} className="sm:w-4 sm:h-4" />
+              <Plus size={14} className={STYLES.plusIcon} />
             </button>
           </div>
         </form>

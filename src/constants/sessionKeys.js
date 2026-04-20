@@ -17,4 +17,7 @@ export const SESSION_KEYS = {
 
   /** Flag para centrar el calendario en el día de hoy al navegar */
   CALENDARIO_IR_HOY: 'calendario_ir_hoy',
+
+  /** Flag que indica que la cuenta fue desactivada por el administrador */
+  ACCOUNT_SUSPENDED: 'account_suspended',
 }

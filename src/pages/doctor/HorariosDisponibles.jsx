@@ -1,7 +1,12 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useEffect } from 'react'
-import CalendarioPabellonesGrid from '../../components/CalendarioPabellonesGrid'
-import { useTheme } from '../../contexts/ThemeContext'
+import CalendarioPabellonesGrid from '@/components/CalendarioPabellonesGrid'
+import { useTheme } from '@/contexts/ThemeContext'
+
+// ─── Estilos ──────────────────────────────────────────────────────────────────
+const STYLES = {
+  page: 'space-y-6',
+}
 
 export default function HorariosDisponibles() {
   const { theme } = useTheme()
@@ -27,7 +32,7 @@ export default function HorariosDisponibles() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className={STYLES.page}>
       <CalendarioPabellonesGrid
         theme={theme}
         inlineMode={false}

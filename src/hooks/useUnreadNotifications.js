@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { countUnread } from '../services/notificationService'
-import { logger } from '../utils/logger'
+import { countUnread } from '@/services/notificationService'
+import { logger } from '@/utils/logger'
 
 /**
  * Hook para obtener el contador de notificaciones no leídas

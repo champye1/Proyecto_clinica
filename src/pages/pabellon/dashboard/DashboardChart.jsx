@@ -2,10 +2,34 @@ import { useState, useMemo } from 'react'
 import { TrendingUp } from 'lucide-react'
 import { format, subDays, eachDayOfInterval } from 'date-fns'
 import { es } from 'date-fns/locale'
-import Card from '../../../components/common/Card'
-import OcupacionChart from '../../../components/charts/OcupacionChart'
-import { useTheme } from '../../../contexts/ThemeContext'
-import { sanitizeString } from '../../../utils/sanitizeInput'
+import Card from '@/components/common/Card'
+import OcupacionChart from '@/components/charts/OcupacionChart'
+import { useTheme } from '@/contexts/ThemeContext'
+import { sanitizeString } from '@/utils/sanitizeInput'
+
+// ─── Datos ────────────────────────────────────────────────────────────────────
+const CHART_OPCIONES = [
+  { id: 'porcentaje', label: 'Ocupación %' },
+  { id: 'horas_ocupadas', label: 'Horas ocupadas' },
+  { id: 'horas_libres', label: 'Horas libres' },
+]
+
+// ─── Estilos ──────────────────────────────────────────────────────────────────
+const STYLES = {
+  cardWrap:       'mb-6 sm:mb-8',
+  header:         'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6',
+  titleDark:      'font-black uppercase text-xs sm:text-sm flex items-center gap-2 text-white',
+  titleLight:     'font-black uppercase text-xs sm:text-sm flex items-center gap-2 text-slate-800',
+  controls:       'flex flex-wrap items-center gap-2 sm:gap-3',
+  toggleGroup:    'inline-flex rounded-full bg-slate-100 text-[10px] sm:text-xs p-1',
+  toggleActive:   'px-2.5 sm:px-3 py-1 rounded-full font-bold uppercase tracking-tight transition-colors bg-blue-600 text-white shadow-sm',
+  toggleInactive: 'px-2.5 sm:px-3 py-1 rounded-full font-bold uppercase tracking-tight transition-colors bg-transparent text-slate-500 hover:text-slate-900',
+  filterLabel:    'text-[9px] sm:text-[10px] font-black uppercase text-slate-400',
+  filterSelect:   'text-[10px] sm:text-xs font-bold border border-slate-200 rounded-full px-2.5 py-1 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500',
+  chartWrap:      'overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0',
+  filterWrap:     'flex items-center gap-1.5',
+  trendIcon:      'sm:w-[18px] sm:h-[18px] text-blue-500',
+}
 
 /**
  * Gráfico de ocupación semanal del Dashboard de Pabellón.
@@ -57,44 +81,32 @@ export default function DashboardChart({ cirugiasSemana = [], pabellonesActivos 
     })
   }, [cirugiasSemana, ocupacion, filtroPabellon, pabellonesActivos])
 
-  const opciones = [
-    { id: 'porcentaje', label: 'Ocupación %' },
-    { id: 'horas_ocupadas', label: 'Horas ocupadas' },
-    { id: 'horas_libres', label: 'Horas libres' },
-  ]
-
   return (
-    <Card id="ocupacion-semanal" className="mb-6 sm:mb-8">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <h3 className={`font-black uppercase text-xs sm:text-sm flex items-center gap-2 ${
-          isDark ? 'text-white' : 'text-slate-800'
-        }`}>
-          <TrendingUp size={16} className="sm:w-[18px] sm:h-[18px] text-blue-500" />
+    <Card id="ocupacion-semanal" className={STYLES.cardWrap}>
+      <div className={STYLES.header}>
+        <h3 className={isDark ? STYLES.titleDark : STYLES.titleLight}>
+          <TrendingUp size={16} className={STYLES.trendIcon} />
           Ocupación Semanal
         </h3>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <div className="inline-flex rounded-full bg-slate-100 text-[10px] sm:text-xs p-1">
-            {opciones.map(op => (
+        <div className={STYLES.controls}>
+          <div className={STYLES.toggleGroup}>
+            {CHART_OPCIONES.map(op => (
               <button
                 key={op.id}
                 type="button"
                 onClick={() => setFiltroTipo(op.id)}
-                className={`px-2.5 sm:px-3 py-1 rounded-full font-bold uppercase tracking-tight transition-colors ${
-                  filtroTipo === op.id
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-transparent text-slate-500 hover:text-slate-900'
-                }`}
+                className={filtroTipo === op.id ? STYLES.toggleActive : STYLES.toggleInactive}
               >
                 {op.label}
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[9px] sm:text-[10px] font-black uppercase text-slate-400">Pabellón</span>
+          <div className={STYLES.filterWrap}>
+            <span className={STYLES.filterLabel}>Pabellón</span>
             <select
               value={filtroPabellon}
               onChange={(e) => setFiltroPabellon(sanitizeString(e.target.value))}
-              className="text-[10px] sm:text-xs font-bold border border-slate-200 rounded-full px-2.5 py-1 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={STYLES.filterSelect}
               aria-label="Filtrar por pabellón"
             >
               <option value="todos">Todos</option>
@@ -105,7 +117,7 @@ export default function DashboardChart({ cirugiasSemana = [], pabellonesActivos 
           </div>
         </div>
       </div>
-      <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+      <div className={STYLES.chartWrap}>
         <OcupacionChart data={datosOcupacion} mode={filtroTipo} />
       </div>
     </Card>

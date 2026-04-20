@@ -1,16 +1,62 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '../../config/supabase'
+import { supabase } from '@/config/supabase'
 import { Search, Filter, Download, FileSpreadsheet, Calendar, User, Database, Clock } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { useDebounce } from '../../hooks/useDebounce'
-import { sanitizeString } from '../../utils/sanitizeInput'
-import { logger } from '../../utils/logger'
-import { exportToCSV, exportToExcel } from '../../utils/exportData'
-import Pagination from '../../components/common/Pagination'
-import LoadingSpinner from '../../components/common/LoadingSpinner'
-import { useTheme } from '../../contexts/ThemeContext'
+import { useDebounce } from '@/hooks/useDebounce'
+import { sanitizeString } from '@/utils/sanitizeInput'
+import { logger } from '@/utils/logger'
+import { exportToCSV, exportToExcel } from '@/utils/exportData'
+import Pagination from '@/components/common/Pagination'
+import LoadingSpinner from '@/components/common/LoadingSpinner'
+import { useTheme } from '@/contexts/ThemeContext'
+
+// ─── Estilos ──────────────────────────────────────────────────────────────────
+const STYLES = {
+  page:           'space-y-6',
+  header:         'flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4',
+  titleDark:      'text-2xl sm:text-3xl font-bold text-white',
+  titleLight:     'text-2xl sm:text-3xl font-bold text-gray-900',
+  exportRow:      'flex gap-2',
+  exportBtn:      'btn-secondary flex items-center gap-2 text-sm',
+  exportBtnLabel: 'hidden sm:inline',
+  filtersCard:    'card',
+  searchWrap:     'relative',
+  searchIcon:     'absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5',
+  searchInput:    'input-field pl-10',
+  filtersGrid:    'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4',
+  filterLabel:    'label-field text-sm',
+  filterSelect:   'input-field',
+  filterInput:    'input-field',
+  tableCard:      'card',
+  loadingWrap:    'text-center py-8',
+  emptyDark:      'text-center py-8 text-slate-300',
+  emptyLight:     'text-center py-8 text-gray-500',
+  tableWrap:      'overflow-x-auto',
+  table:          'w-full',
+  theadDark:      'border-b border-slate-700',
+  theadLight:     'border-b border-slate-200',
+  thDark:         'text-left py-3 px-4 font-medium text-slate-200',
+  thLight:        'text-left py-3 px-4 font-medium text-gray-700',
+  trDark:         'border-b bg-slate-800 border-slate-700 hover:bg-slate-700 transition-colors',
+  trLight:        'border-b bg-white border-slate-200 hover:bg-slate-50 transition-colors',
+  tdDark:         'py-3 px-4 text-sm text-slate-100',
+  tdLight:        'py-3 px-4 text-sm text-gray-700',
+  tdCellDark:     'py-3 px-4 text-slate-100',
+  tdCellLight:    'py-3 px-4 text-gray-700',
+  cellIconDark:   'flex items-center gap-2 text-slate-400',
+  cellIconLight:  'flex items-center gap-2 text-gray-400',
+  cellIcon:       'w-4 h-4',
+  actionBadge:    'px-2 py-1 rounded text-xs font-medium',
+  idMonoDark:     'text-sm font-mono text-slate-200',
+  idMonoLight:    'text-sm font-mono text-gray-600',
+  iconSm:         'w-4 h-4',
+  spaceY4:        'space-y-4',
+  textSm:         'text-sm',
+  textSmMono:     'text-sm font-mono',
+  tdCell:         'py-3 px-4',
+}
 
 export default function Auditoria() {
   const [busqueda, setBusqueda] = useState('')
@@ -153,56 +199,47 @@ export default function Auditoria() {
     return colores[accion] || 'bg-gray-100 text-gray-800'
   }
 
+  const isDark = theme === 'dark'
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className={`text-2xl sm:text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Historial de Auditoría</h1>
+    <div className={STYLES.page}>
+      <div className={STYLES.header}>
+        <h1 className={isDark ? STYLES.titleDark : STYLES.titleLight}>Historial de Auditoría</h1>
         {logsFiltrados.length > 0 && (
-          <div className="flex gap-2">
-            <button
-              onClick={handleExportCSV}
-              className="btn-secondary flex items-center gap-2 text-sm"
-              title="Exportar a CSV"
-            >
-              <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">CSV</span>
+          <div className={STYLES.exportRow}>
+            <button onClick={handleExportCSV} className={STYLES.exportBtn} title="Exportar a CSV">
+              <Download className={STYLES.iconSm} />
+              <span className={STYLES.exportBtnLabel}>CSV</span>
             </button>
-            <button
-              onClick={handleExportExcel}
-              className="btn-secondary flex items-center gap-2 text-sm"
-              title="Exportar a Excel"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span className="hidden sm:inline">Excel</span>
+            <button onClick={handleExportExcel} className={STYLES.exportBtn} title="Exportar a Excel">
+              <FileSpreadsheet className={STYLES.iconSm} />
+              <span className={STYLES.exportBtnLabel}>Excel</span>
             </button>
           </div>
         )}
       </div>
 
       {/* Filtros */}
-      <div className="card">
-        <div className="space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+      <div className={STYLES.filtersCard}>
+        <div className={STYLES.spaceY4}>
+          <div className={STYLES.searchWrap}>
+            <Search className={STYLES.searchIcon} />
             <input
               type="text"
               value={busqueda}
               onChange={(e) => setBusqueda(sanitizeString(e.target.value))}
               placeholder="Buscar por acción, tabla o usuario..."
-              className="input-field pl-10"
+              className={STYLES.searchInput}
             />
           </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+          <div className={STYLES.filtersGrid}>
             <div>
-              <label className="label-field text-sm">Tabla</label>
+              <label className={STYLES.filterLabel}>Tabla</label>
               <select
                 value={filtroTabla}
-                onChange={(e) => {
-                  setFiltroTabla(sanitizeString(e.target.value))
-                  setCurrentPage(1)
-                }}
-                className="input-field"
+                onChange={(e) => { setFiltroTabla(sanitizeString(e.target.value)); setCurrentPage(1) }}
+                className={STYLES.filterSelect}
               >
                 <option value="">Todas las tablas</option>
                 {tablasUnicas.map(tabla => (
@@ -212,14 +249,11 @@ export default function Auditoria() {
             </div>
 
             <div>
-              <label className="label-field text-sm">Acción</label>
+              <label className={STYLES.filterLabel}>Acción</label>
               <select
                 value={filtroAccion}
-                onChange={(e) => {
-                  setFiltroAccion(sanitizeString(e.target.value))
-                  setCurrentPage(1)
-                }}
-                className="input-field"
+                onChange={(e) => { setFiltroAccion(sanitizeString(e.target.value)); setCurrentPage(1) }}
+                className={STYLES.filterSelect}
               >
                 <option value="">Todas las acciones</option>
                 <option value="INSERT">Crear (INSERT)</option>
@@ -229,28 +263,22 @@ export default function Auditoria() {
             </div>
 
             <div>
-              <label className="label-field text-sm">Desde</label>
+              <label className={STYLES.filterLabel}>Desde</label>
               <input
                 type="date"
                 value={fechaDesde}
-                onChange={(e) => {
-                  setFechaDesde(sanitizeString(e.target.value))
-                  setCurrentPage(1)
-                }}
-                className="input-field"
+                onChange={(e) => { setFechaDesde(sanitizeString(e.target.value)); setCurrentPage(1) }}
+                className={STYLES.filterInput}
               />
             </div>
 
             <div>
-              <label className="label-field text-sm">Hasta</label>
+              <label className={STYLES.filterLabel}>Hasta</label>
               <input
                 type="date"
                 value={fechaHasta}
-                onChange={(e) => {
-                  setFechaHasta(sanitizeString(e.target.value))
-                  setCurrentPage(1)
-                }}
-                className="input-field"
+                onChange={(e) => { setFechaHasta(sanitizeString(e.target.value)); setCurrentPage(1) }}
+                className={STYLES.filterInput}
                 min={fechaDesde}
               />
             </div>
@@ -259,63 +287,54 @@ export default function Auditoria() {
       </div>
 
       {/* Lista de logs */}
-      <div className="card">
+      <div className={STYLES.tableCard}>
         {isLoading ? (
-          <div className="text-center py-8">
+          <div className={STYLES.loadingWrap}>
             <LoadingSpinner />
           </div>
         ) : logsFiltrados.length === 0 ? (
-          <div className={`text-center py-8 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-500'}`}>
+          <div className={isDark ? STYLES.emptyDark : STYLES.emptyLight}>
             No se encontraron registros de auditoría
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full">
+            <div className={STYLES.tableWrap}>
+              <table className={STYLES.table}>
                 <thead>
-                  <tr className={`border-b ${theme === 'dark' ? 'border-slate-700' : 'border-slate-200'}`}>
-                    <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Fecha y Hora</th>
-                    <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Usuario</th>
-                    <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Acción</th>
-                    <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>Tabla</th>
-                    <th className={`text-left py-3 px-4 font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-gray-700'}`}>ID Registro</th>
+                  <tr className={isDark ? STYLES.theadDark : STYLES.theadLight}>
+                    {['Fecha y Hora', 'Usuario', 'Acción', 'Tabla', 'ID Registro'].map(h => (
+                      <th key={h} className={isDark ? STYLES.thDark : STYLES.thLight}>{h}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {logsPaginados.map(log => (
-                    <tr 
-                      key={log.id} 
-                      className={`border-b transition-colors ${
-                        theme === 'dark' 
-                          ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' 
-                          : 'bg-white border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      <td className={`py-3 px-4 text-sm ${theme === 'dark' ? 'text-slate-100' : 'text-gray-700'}`}>
-                        <div className="flex items-center gap-2">
-                          <Clock className={`w-4 h-4 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-400'}`} />
+                    <tr key={log.id} className={isDark ? STYLES.trDark : STYLES.trLight}>
+                      <td className={isDark ? STYLES.tdDark : STYLES.tdLight}>
+                        <div className={isDark ? STYLES.cellIconDark : STYLES.cellIconLight}>
+                          <Clock className={STYLES.cellIcon} />
                           {format(new Date(log.created_at), 'dd/MM/yyyy HH:mm:ss', { locale: es })}
                         </div>
                       </td>
-                      <td className={`py-3 px-4 ${theme === 'dark' ? 'text-slate-100' : 'text-gray-700'}`}>
-                        <div className="flex items-center gap-2">
-                          <User className={`w-4 h-4 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-400'}`} />
-                          <span className="text-sm">{log.users?.email || 'Sistema'}</span>
+                      <td className={isDark ? STYLES.tdCellDark : STYLES.tdCellLight}>
+                        <div className={isDark ? STYLES.cellIconDark : STYLES.cellIconLight}>
+                          <User className={STYLES.cellIcon} />
+                          <span className={STYLES.textSm}>{log.users?.email || 'Sistema'}</span>
                         </div>
                       </td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${getAccionColor(log.accion, theme)}`}>
+                      <td className={STYLES.tdCell}>
+                        <span className={`${STYLES.actionBadge} ${getAccionColor(log.accion, theme)}`}>
                           {log.accion}
                         </span>
                       </td>
-                      <td className={`py-3 px-4 ${theme === 'dark' ? 'text-slate-100' : 'text-gray-700'}`}>
-                        <div className="flex items-center gap-2">
-                          <Database className={`w-4 h-4 ${theme === 'dark' ? 'text-slate-400' : 'text-gray-400'}`} />
-                          <span className="text-sm font-mono">{log.tabla_afectada}</span>
+                      <td className={isDark ? STYLES.tdCellDark : STYLES.tdCellLight}>
+                        <div className={isDark ? STYLES.cellIconDark : STYLES.cellIconLight}>
+                          <Database className={STYLES.cellIcon} />
+                          <span className={STYLES.textSmMono}>{log.tabla_afectada}</span>
                         </div>
                       </td>
-                      <td className="py-3 px-4">
-                        <span className={`text-sm font-mono ${theme === 'dark' ? 'text-slate-200' : 'text-gray-600'}`}>
+                      <td className={STYLES.tdCell}>
+                        <span className={isDark ? STYLES.idMonoDark : STYLES.idMonoLight}>
                           {log.registro_id ? log.registro_id.substring(0, 8) + '...' : '-'}
                         </span>
                       </td>

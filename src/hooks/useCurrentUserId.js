@@ -3,7 +3,7 @@
  * Extrae la lógica duplicada de ambos layouts (PabellonLayout, DoctorLayout).
  */
 import { useState, useEffect } from 'react'
-import { supabase } from '../config/supabase'
+import { supabase } from '@/config/supabase'
 
 /**
  * Retorna el ID del usuario autenticado, suscribiéndose a cambios de sesión.

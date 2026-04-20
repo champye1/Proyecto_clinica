@@ -1,7 +1,24 @@
 import { Component } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import * as Sentry from '@sentry/react'
-import { logger } from '../../utils/logger'
+import { logger } from '@/utils/logger'
+
+// ─── Estilos ──────────────────────────────────────────────────────────────────
+const STYLES = {
+  page:        'min-h-screen flex items-center justify-center bg-slate-50 p-4',
+  card:        'bg-white rounded-2xl shadow-xl border border-red-200 p-8 max-w-md w-full',
+  header:      'flex items-center gap-4 mb-6',
+  iconWrap:    'bg-red-100 p-3 rounded-full',
+  icon:        'w-8 h-8 text-red-600',
+  title:       'text-xl font-black text-slate-900',
+  subtitle:    'text-sm text-slate-500 mt-1',
+  devError:    'mb-6 p-4 bg-slate-100 rounded-lg',
+  errorText:   'text-xs font-mono text-red-600 break-words',
+  eventId:     'text-xs text-slate-400 mb-4',
+  actions:     'flex gap-3',
+  reloadBtn:   'flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold text-sm uppercase transition-all',
+  homeBtn:     'flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 px-6 py-3 rounded-xl font-bold text-sm uppercase transition-all',
+}
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -37,42 +54,42 @@ class ErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl border border-red-200 p-8 max-w-md w-full">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="bg-red-100 p-3 rounded-full">
-                <AlertTriangle className="w-8 h-8 text-red-600" />
+        <div className={STYLES.page}>
+          <div className={STYLES.card}>
+            <div className={STYLES.header}>
+              <div className={STYLES.iconWrap}>
+                <AlertTriangle className={STYLES.icon} />
               </div>
               <div>
-                <h2 className="text-xl font-black text-slate-900">Algo salió mal</h2>
-                <p className="text-sm text-slate-500 mt-1">Se produjo un error inesperado</p>
+                <h2 className={STYLES.title}>Algo salió mal</h2>
+                <p className={STYLES.subtitle}>Se produjo un error inesperado</p>
               </div>
             </div>
 
             {import.meta.env.DEV && this.state.error && (
-              <div className="mb-6 p-4 bg-slate-100 rounded-lg">
-                <p className="text-xs font-mono text-red-600 break-words">
+              <div className={STYLES.devError}>
+                <p className={STYLES.errorText}>
                   {this.state.error.toString()}
                 </p>
               </div>
             )}
 
             {this.state.eventId && (
-              <p className="text-xs text-slate-400 mb-4">
+              <p className={STYLES.eventId}>
                 ID de error: {this.state.eventId}
               </p>
             )}
 
-            <div className="flex gap-3">
+            <div className={STYLES.actions}>
               <button
                 onClick={this.handleReset}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold text-sm uppercase transition-all"
+                className={STYLES.reloadBtn}
               >
                 Recargar página
               </button>
               <button
                 onClick={() => window.location.href = '/'}
-                className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 px-6 py-3 rounded-xl font-bold text-sm uppercase transition-all"
+                className={STYLES.homeBtn}
               >
                 Ir al inicio
               </button>

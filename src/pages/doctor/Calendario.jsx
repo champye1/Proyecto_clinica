@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '../../config/supabase'
+import { supabase } from '@/config/supabase'
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, CheckCircle, Info, XCircle } from 'lucide-react'
-import { useNotifications } from '../../hooks/useNotifications'
-import Modal from '../../components/common/Modal'
-import Button from '../../components/common/Button'
+import { useNotifications } from '@/hooks/useNotifications'
+import Modal from '@/components/common/Modal'
+import Button from '@/components/common/Button'
 import {
   startOfYear,
   endOfYear,
@@ -42,13 +42,118 @@ const MESES = [
   { indice: 11, nombre: 'DICIEMBRE' },
 ]
 
+// ─── Estilos ──────────────────────────────────────────────────────────────────────────────
+const STYLES_BC = {
+  nav:     'flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-6',
+  sep:     'text-slate-300',
+  current: 'text-slate-900',
+}
+
+const STYLES_MV = {
+  wrapper:     'space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500',
+  infoBanner:  'bg-blue-50 border border-blue-100 rounded-3xl p-6 flex items-center gap-4',
+  infoIcon:    'w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600',
+  infoSvg:     'w-5 h-5',
+  infoTitle:   'text-sm font-black text-blue-900 uppercase tracking-wide',
+  infoText:    'text-xs font-medium text-blue-600 mt-1',
+  grid:        'grid gap-4',
+  weekBtn:     'w-full bg-white border border-slate-100 rounded-3xl p-6 flex items-center justify-between hover:border-blue-500 hover:shadow-md transition-all group',
+  weekIconBox: 'w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center group-hover:bg-blue-50 transition-colors',
+  weekCalIcon: 'w-6 h-6 text-slate-400 group-hover:text-blue-600',
+  weekTitle:   'text-sm font-black text-slate-900 uppercase tracking-wide',
+  weekSub:     'text-xs font-medium text-slate-400 mt-1 uppercase tracking-wider',
+  weekChevron: 'w-5 h-5 text-slate-300 group-hover:text-blue-500',
+}
+
+const STYLES_WV = {
+  grid:       'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 justify-items-center',
+  dayCard:    'bg-white rounded-[2rem] border border-slate-100 p-6 flex flex-col h-full w-full max-w-[400px]',
+  dayCardTop: 'flex items-center justify-between mb-6',
+  dayName:    'text-sm sm:text-base font-black text-slate-900 uppercase whitespace-nowrap',
+  dayDate:    'text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap',
+  dayBody:    'space-y-4 flex-1',
+  cirCard:    'bg-blue-50 border border-blue-100 rounded-xl p-3',
+  cirTime:    'text-xs font-black text-blue-900 uppercase tracking-wider',
+  cirPatient: 'text-xs font-bold text-slate-700 mb-1',
+  cirRoom:    'text-[10px] text-slate-500',
+  emptyTxt:   'text-xs text-slate-400 italic text-center py-4',
+  detailBtn:  'mt-6 w-full py-3 rounded-xl bg-slate-50 text-slate-600 text-xs font-black uppercase tracking-wider hover:bg-blue-50 hover:text-blue-600 transition-colors',
+}
+
+const STYLES_DV = {
+  wrapper:        'flex gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500',
+  sidebar:        'w-80 flex-shrink-0 space-y-6',
+  darkCard:       'bg-[#0f172a] rounded-[2rem] p-6 text-white overflow-hidden relative',
+  darkTitle:      'text-xs font-black uppercase tracking-[0.2em] opacity-70 mb-1',
+  darkSub:        'text-sm font-medium opacity-50',
+  blob:           'absolute top-0 right-0 w-32 h-32 bg-blue-500 rounded-full blur-[60px] opacity-20 transform translate-x-10 -translate-y-10',
+  cirList:        'bg-white rounded-[2rem] border border-slate-100 p-6 space-y-4',
+  cirListTitle:   'text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4',
+  cirItem:        'bg-blue-50 border border-blue-100 rounded-xl p-4',
+  cirTime:        'text-xs font-black text-blue-900 uppercase tracking-wider',
+  cirPatient:     'text-sm font-bold text-slate-900 mb-1',
+  cirRut:         'text-xs text-slate-600 mb-2',
+  cirRoom:        'text-xs font-bold text-blue-600',
+  cirObs:         'text-xs text-slate-500 mt-2 italic',
+  cancelBtn:      'mt-3 w-full py-2 px-4 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2',
+  cancelIcon:     'w-4 h-4',
+  emptyCard:      'bg-white rounded-[2rem] border border-slate-100 p-6 text-center',
+  emptyTxt:       'text-xs text-slate-400',
+  legendCard:     'bg-white rounded-[2rem] border border-slate-100 p-6',
+  legendTitle:    'text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2',
+  legendIcon:     'w-4 h-4 rounded-md bg-blue-50 flex items-center justify-center text-blue-500 text-xs',
+  legendDotAvail: 'w-3 h-3 rounded-full border-2 border-slate-200',
+  legendTxt:      'text-xs font-bold text-slate-500 uppercase tracking-wide',
+  legendDotMine:  'w-3 h-3 rounded-full bg-blue-50 border-2 border-blue-100',
+  main:           'flex-1 bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm overflow-hidden relative',
+  gridHeader:     'grid grid-cols-[auto_1fr_1fr_1fr_1fr] gap-4 mb-4',
+  timeSpacer:     'w-12',
+  pabName:        'text-xs font-black text-slate-900 uppercase tracking-wider',
+  pabCount:       'text-[10px] font-bold text-green-600 uppercase tracking-wider',
+  gridRow:        'grid grid-cols-[auto_1fr_1fr_1fr_1fr] gap-4 items-center group',
+  timeLabel:      'w-12 text-[10px] font-bold text-slate-400 text-right',
+  occupied:       'h-16 rounded-2xl bg-blue-50 border border-blue-200 p-3 flex flex-col justify-center',
+  occupiedLabel:  'text-[10px] font-black text-blue-600 uppercase tracking-wider mb-1',
+  occupiedName:   'text-xs font-bold text-blue-900 truncate',
+  available:      'h-16 rounded-2xl border-2 border-dashed border-slate-100',
+}
+
+const STYLES = {
+  page:           'space-y-8',
+  headerRow:      'flex flex-col gap-4 md:flex-row md:items-center md:justify-between',
+  headerRight:    'flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4',
+  yearSelector:   'flex items-center gap-2 bg-white border border-slate-200 rounded-2xl px-3 py-2',
+  yearNavBtn:     'p-1 rounded-lg hover:bg-slate-100',
+  yearNavIcon:    'w-4 h-4 text-slate-400',
+  yearLabel:      'text-sm font-bold text-slate-700',
+  loadingTxt:     'text-slate-400 text-sm font-bold animate-pulse',
+  legendRow:      'flex justify-end mb-4',
+  legendItems:    'flex flex-wrap items-center gap-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400',
+  legendDotBlue:  'w-3 h-3 rounded-full bg-blue-500',
+  legendDotSlate: 'w-3 h-3 rounded-full bg-slate-300',
+  monthGrid:      'grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3 animate-in fade-in slide-in-from-bottom-4 duration-500',
+  monthCard:      'bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-6 flex flex-col justify-between text-left hover:border-blue-300 hover:shadow-md transition-all group',
+  monthCardTop:   'flex items-start justify-between mb-4 w-full',
+  monthCirCount:  'text-xs font-black text-slate-400 uppercase tracking-[0.2em]',
+  monthName:      'text-xl font-black text-slate-900 mt-1 group-hover:text-blue-600 transition-colors',
+  monthPct:       'text-xl font-black text-blue-600',
+  monthOccupied:  'text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]',
+  monthBarBg:     'h-2 w-full bg-slate-100 rounded-full overflow-hidden',
+  monthBarFlex:   'h-full flex',
+  monthBarBlue:   'bg-blue-500',
+  monthBarSlate:  'bg-slate-300',
+  monthBarBottom: 'flex items-center justify-between mt-3 text-[11px] font-bold text-slate-500',
+  cancelInfoBox:  'bg-slate-50 rounded-xl p-4 space-y-2',
+  cancelInfoTxt:  'text-sm text-slate-600',
+}
+
 // Componente Breadcrumbs
 const Breadcrumbs = ({ anio, view, selectedMonth, selectedWeek, selectedDay, onNavigate }) => {
   const monthName = selectedMonth !== null ? MESES[selectedMonth].nombre : ''
   const weekNumber = selectedWeek ? getWeek(selectedWeek, { weekStartsOn: 1 }) - getWeek(startOfMonth(selectedWeek), { weekStartsOn: 1 }) + 1 : ''
   
   return (
-    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-6">
+    <div className={STYLES_BC.nav}>
       <button 
         onClick={() => onNavigate('year')} 
         className={`hover:text-blue-600 ${view === 'year' ? 'text-slate-900' : ''}`}
@@ -58,7 +163,7 @@ const Breadcrumbs = ({ anio, view, selectedMonth, selectedWeek, selectedDay, onN
       
       {(view === 'month' || view === 'week' || view === 'day') && (
         <>
-          <span className="text-slate-300">/</span>
+          <span className={STYLES_BC.sep}>/</span>
           <button 
             onClick={() => onNavigate('month')}
             className={`hover:text-blue-600 ${view === 'month' ? 'text-slate-900' : ''}`}
@@ -70,7 +175,7 @@ const Breadcrumbs = ({ anio, view, selectedMonth, selectedWeek, selectedDay, onN
       
       {(view === 'week' || view === 'day') && (
         <>
-          <span className="text-slate-300">/</span>
+          <span className={STYLES_BC.sep}>/</span>
           <button 
             onClick={() => onNavigate('week')}
             className={`hover:text-blue-600 ${view === 'week' ? 'text-slate-900' : ''}`}
@@ -82,8 +187,8 @@ const Breadcrumbs = ({ anio, view, selectedMonth, selectedWeek, selectedDay, onN
 
       {view === 'day' && selectedDay && (
         <>
-          <span className="text-slate-300">/</span>
-          <span className="text-slate-900">
+          <span className={STYLES_BC.sep}>/</span>
+          <span className={STYLES_BC.current}>
             {format(selectedDay, 'EEEE d', { locale: es })}
           </span>
         </>
@@ -101,18 +206,18 @@ const MonthView = ({ anio, monthIndex, onWeekClick }) => {
   }, [anio, monthIndex])
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="bg-blue-50 border border-blue-100 rounded-3xl p-6 flex items-center gap-4">
-        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-          <Info className="w-5 h-5" />
+    <div className={STYLES_MV.wrapper}>
+      <div className={STYLES_MV.infoBanner}>
+        <div className={STYLES_MV.infoIcon}>
+          <Info className={STYLES_MV.infoSvg} />
         </div>
         <div>
-          <h3 className="text-sm font-black text-blue-900 uppercase tracking-wide">Mis Cirugías Programadas</h3>
-          <p className="text-xs font-medium text-blue-600 mt-1">Semanas disponibles para {MESES[monthIndex].nombre}.</p>
+          <h3 className={STYLES_MV.infoTitle}>Mis Cirugías Programadas</h3>
+          <p className={STYLES_MV.infoText}>Semanas disponibles para {MESES[monthIndex].nombre}.</p>
         </div>
       </div>
 
-      <div className="grid gap-4">
+      <div className={STYLES_MV.grid}>
         {weeks.map((weekStart, idx) => {
           const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 })
           const isCurrentMonth = isSameMonth(weekStart, new Date(anio, monthIndex)) || isSameMonth(weekEnd, new Date(anio, monthIndex))
@@ -126,22 +231,22 @@ const MonthView = ({ anio, monthIndex, onWeekClick }) => {
             <button
               key={weekStart.toISOString()}
               onClick={() => onWeekClick(weekStart)}
-              className="w-full bg-white border border-slate-100 rounded-3xl p-6 flex items-center justify-between hover:border-blue-500 hover:shadow-md transition-all group"
+              className={STYLES_MV.weekBtn}
             >
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center group-hover:bg-blue-50 transition-colors">
-                  <CalendarIcon className="w-6 h-6 text-slate-400 group-hover:text-blue-600" />
+                <div className={STYLES_MV.weekIconBox}>
+                  <CalendarIcon className={STYLES_MV.weekCalIcon} />
                 </div>
                 <div className="text-left">
-                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide">
+                  <h3 className={STYLES_MV.weekTitle}>
                     Semana 0{weekNum}
                   </h3>
-                  <p className="text-xs font-medium text-slate-400 mt-1 uppercase tracking-wider">
+                  <p className={STYLES_MV.weekSub}>
                     Del {format(weekStart, 'd', { locale: es })} al {format(weekEnd, 'd', { locale: es })} de {MESES[monthIndex].nombre}
                   </p>
                 </div>
               </div>
-              <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500" />
+              <ChevronRight className={STYLES_MV.weekChevron} />
             </button>
           )
         })}
@@ -160,19 +265,19 @@ const WeekView = ({ weekStart, cirugias, onDayClick, pabellones }) => {
   }, [weekStart])
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 justify-items-center">
+    <div className={STYLES_WV.grid}>
       {days.map((day) => {
         const dayStr = format(day, 'yyyy-MM-dd')
         const cirugiasDia = cirugias.filter(c => c.fecha === dayStr)
         
         return (
-          <div key={day.toISOString()} className="bg-white rounded-[2rem] border border-slate-100 p-6 flex flex-col h-full w-full max-w-[400px]">
-            <div className="flex items-center justify-between mb-6">
+          <div key={day.toISOString()} className={STYLES_WV.dayCard}>
+            <div className={STYLES_WV.dayCardTop}>
               <div className="flex-1 min-w-0 pr-2">
-                <h3 className="text-sm sm:text-base font-black text-slate-900 uppercase whitespace-nowrap">
+                <h3 className={STYLES_WV.dayName}>
                   {format(day, 'EEEE', { locale: es })}
                 </h3>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                <p className={STYLES_WV.dayDate}>
                   {format(day, 'd MMMM', { locale: es })}
                 </p>
               </div>
@@ -185,12 +290,12 @@ const WeekView = ({ weekStart, cirugias, onDayClick, pabellones }) => {
               </span>
             </div>
 
-            <div className="space-y-4 flex-1">
+            <div className={STYLES_WV.dayBody}>
               {cirugiasDia.length > 0 ? (
                 cirugiasDia.map(cirugia => (
-                  <div key={cirugia.id} className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+                  <div key={cirugia.id} className={STYLES_WV.cirCard}>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-black text-blue-900 uppercase tracking-wider">
+                      <span className={STYLES_WV.cirTime}>
                         {cirugia.hora_inicio} - {cirugia.hora_fin}
                       </span>
                       <span className={`px-2 py-1 rounded text-[10px] font-bold ${
@@ -202,16 +307,16 @@ const WeekView = ({ weekStart, cirugias, onDayClick, pabellones }) => {
                         {cirugia.estado}
                       </span>
                     </div>
-                    <p className="text-xs font-bold text-slate-700 mb-1">
+                    <p className={STYLES_WV.cirPatient}>
                       {cirugia.patients?.nombre} {cirugia.patients?.apellido}
                     </p>
-                    <p className="text-[10px] text-slate-500">
+                    <p className={STYLES_WV.cirRoom}>
                       {cirugia.operating_rooms?.nombre}
                     </p>
                   </div>
                 ))
               ) : (
-                <p className="text-xs text-slate-400 italic text-center py-4">
+                <p className={STYLES_WV.emptyTxt}>
                   No hay cirugías programadas
                 </p>
               )}
@@ -219,7 +324,7 @@ const WeekView = ({ weekStart, cirugias, onDayClick, pabellones }) => {
 
             <button
               onClick={() => onDayClick(day)}
-              className="mt-6 w-full py-3 rounded-xl bg-slate-50 text-slate-600 text-xs font-black uppercase tracking-wider hover:bg-blue-50 hover:text-blue-600 transition-colors"
+              className={STYLES_WV.detailBtn}
             >
               Ver Detalles
             </button>
@@ -255,27 +360,27 @@ const DayView = ({ day, pabellones, cirugias }) => {
   }
 
   return (
-    <div className="flex gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className={STYLES_DV.wrapper}>
       {/* Sidebar Izquierdo - Info */}
-      <div className="w-80 flex-shrink-0 space-y-6">
-        <div className="bg-[#0f172a] rounded-[2rem] p-6 text-white overflow-hidden relative">
+      <div className={STYLES_DV.sidebar}>
+        <div className={STYLES_DV.darkCard}>
           <div className="relative z-10">
-             <h3 className="text-xs font-black uppercase tracking-[0.2em] opacity-70 mb-1">Mis Cirugías</h3>
-             <p className="text-sm font-medium opacity-50">Vista detallada del día</p>
+             <h3 className={STYLES_DV.darkTitle}>Mis Cirugías</h3>
+             <p className={STYLES_DV.darkSub}>Vista detallada del día</p>
           </div>
-          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500 rounded-full blur-[60px] opacity-20 transform translate-x-10 -translate-y-10" />
+          <div className={STYLES_DV.blob} />
         </div>
 
         {/* Lista de cirugías del día */}
         {cirugiasDia.length > 0 ? (
-          <div className="bg-white rounded-[2rem] border border-slate-100 p-6 space-y-4">
-            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">
+          <div className={STYLES_DV.cirList}>
+            <h4 className={STYLES_DV.cirListTitle}>
               Cirugías Programadas
             </h4>
             {cirugiasDia.map(cirugia => (
-              <div key={cirugia.id} className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+              <div key={cirugia.id} className={STYLES_DV.cirItem}>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-black text-blue-900 uppercase tracking-wider">
+                  <span className={STYLES_WV.cirTime}>
                     {cirugia.hora_inicio} - {cirugia.hora_fin}
                   </span>
                   <span className={`px-2 py-1 rounded text-[10px] font-bold ${
@@ -288,26 +393,26 @@ const DayView = ({ day, pabellones, cirugias }) => {
                     {cirugia.estado}
                   </span>
                 </div>
-                <p className="text-sm font-bold text-slate-900 mb-1">
+                <p className={STYLES_DV.cirPatient}>
                   {cirugia.patients?.nombre} {cirugia.patients?.apellido}
                 </p>
-                <p className="text-xs text-slate-600 mb-2">
+                <p className={STYLES_DV.cirRut}>
                   RUT: {cirugia.patients?.rut}
                 </p>
-                <p className="text-xs font-bold text-blue-600">
+                <p className={STYLES_DV.cirRoom}>
                   {cirugia.operating_rooms?.nombre}
                 </p>
                 {cirugia.observaciones && (
-                  <p className="text-xs text-slate-500 mt-2 italic">
+                  <p className={STYLES_DV.cirObs}>
                     {cirugia.observaciones}
                   </p>
                 )}
                 {cirugia.estado === 'programada' && (
                   <button
                     onClick={() => handleCancelarClick(cirugia)}
-                    className="mt-3 w-full py-2 px-4 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                    className={STYLES_DV.cancelBtn}
                   >
-                    <XCircle className="w-4 h-4" />
+                    <XCircle className={STYLES_DV.cancelIcon} />
                     Cancelar Cirugía
                   </button>
                 )}
@@ -315,37 +420,37 @@ const DayView = ({ day, pabellones, cirugias }) => {
             ))}
           </div>
         ) : (
-          <div className="bg-white rounded-[2rem] border border-slate-100 p-6 text-center">
-            <p className="text-xs text-slate-400">No hay cirugías programadas para este día</p>
+          <div className={STYLES_DV.emptyCard}>
+            <p className={STYLES_DV.emptyTxt}>No hay cirugías programadas para este día</p>
           </div>
         )}
 
-        <div className="bg-white rounded-[2rem] border border-slate-100 p-6">
-           <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-             <span className="w-4 h-4 rounded-md bg-blue-50 flex items-center justify-center text-blue-500 text-xs">?</span>
+        <div className={STYLES_DV.legendCard}>
+           <h4 className={STYLES_DV.legendTitle}>
+             <span className={STYLES_DV.legendIcon}>?</span>
              Leyenda
            </h4>
            <div className="space-y-3">
              <div className="flex items-center gap-3">
-               <div className="w-3 h-3 rounded-full border-2 border-slate-200" />
-               <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Disponible</span>
+               <div className={STYLES_DV.legendDotAvail} />
+               <span className={STYLES_DV.legendTxt}>Disponible</span>
              </div>
              <div className="flex items-center gap-3">
-               <div className="w-3 h-3 rounded-full bg-blue-50 border-2 border-blue-100" />
-               <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Mi Cirugía</span>
+               <div className={STYLES_DV.legendDotMine} />
+               <span className={STYLES_DV.legendTxt}>Mi Cirugía</span>
              </div>
            </div>
         </div>
       </div>
 
       {/* Grid Principal */}
-      <div className="flex-1 bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm overflow-hidden relative">
-        <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr] gap-4 mb-4">
-          <div className="w-12" /> {/* Espaciador hora */}
+      <div className={STYLES_DV.main}>
+        <div className={STYLES_DV.gridHeader}>
+          <div className={STYLES_DV.timeSpacer} /> {/* Espaciador hora */}
           {pabellones.map(p => (
             <div key={p.id} className="text-center">
-              <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">{p.nombre}</h4>
-              <span className="text-[10px] font-bold text-green-600 uppercase tracking-wider">
+              <h4 className={STYLES_DV.pabName}>{p.nombre}</h4>
+              <span className={STYLES_DV.pabCount}>
                 {cirugiasDia.filter(c => c.operating_room_id === p.id).length} Cirugía{cirugiasDia.filter(c => c.operating_room_id === p.id).length !== 1 ? 's' : ''}
               </span>
             </div>
@@ -354,16 +459,16 @@ const DayView = ({ day, pabellones, cirugias }) => {
 
         <div className="space-y-4">
           {slots.map(time => (
-            <div key={time} className="grid grid-cols-[auto_1fr_1fr_1fr_1fr] gap-4 items-center group">
-              <span className="w-12 text-[10px] font-bold text-slate-400 text-right">{time}</span>
+            <div key={time} className={STYLES_DV.gridRow}>
+              <span className={STYLES_DV.timeLabel}>{time}</span>
               {pabellones.map(p => {
                 const { status, data } = getSlotStatus(p.id, time)
                 
                 if (status === 'occupied') {
                    return (
-                     <div key={p.id} className="h-16 rounded-2xl bg-blue-50 border border-blue-200 p-3 flex flex-col justify-center">
-                       <span className="text-[10px] font-black text-blue-600 uppercase tracking-wider mb-1">Mi Cirugía</span>
-                       <span className="text-xs font-bold text-blue-900 truncate">
+                     <div key={p.id} className={STYLES_DV.occupied}>
+                       <span className={STYLES_DV.occupiedLabel}>Mi Cirugía</span>
+                       <span className={STYLES_DV.occupiedName}>
                          {data.patients?.nombre} {data.patients?.apellido}
                        </span>
                      </div>
@@ -373,7 +478,7 @@ const DayView = ({ day, pabellones, cirugias }) => {
                 return (
                   <div
                     key={p.id}
-                    className="h-16 rounded-2xl border-2 border-dashed border-slate-100"
+                    className={STYLES_DV.available}
                   />
                 )
               })}
@@ -490,8 +595,8 @@ export default function Calendario() {
       if (error) throw error
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['calendario-doctor-cirugias'])
-      queryClient.invalidateQueries(['cirugias-dia-detalle'])
+      queryClient.invalidateQueries({ queryKey: ['calendario-doctor-cirugias'] })
+      queryClient.invalidateQueries({ queryKey: ['cirugias-dia-detalle'] })
       showSuccess('Cirugía cancelada exitosamente')
       setShowConfirmCancelar(false)
       setCirugiaACancelar(null)
@@ -559,9 +664,9 @@ export default function Calendario() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className={STYLES.page}>
       {/* Header General */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className={STYLES.headerRow}>
         <div>
           <Breadcrumbs 
              anio={anio} 
@@ -572,22 +677,22 @@ export default function Calendario() {
              onNavigate={handleNavigate}
           />
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+        <div className={STYLES.headerRight}>
            {/* Selector de año solo visible en vista anual */}
            {view === 'year' && (
-             <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-2xl px-3 py-2">
+             <div className={STYLES.yearSelector}>
                <button
                  onClick={() => setAnio(anio - 1)}
-                 className="p-1 rounded-lg hover:bg-slate-100"
+                 className={STYLES.yearNavBtn}
                >
-                 <ChevronLeft className="w-4 h-4 text-slate-400" />
+                 <ChevronLeft className={STYLES.yearNavIcon} />
                </button>
-               <span className="text-sm font-bold text-slate-700">{anio}</span>
+               <span className={STYLES.yearLabel}>{anio}</span>
                <button
                  onClick={() => setAnio(anio + 1)}
-                 className="p-1 rounded-lg hover:bg-slate-100"
+                 className={STYLES.yearNavBtn}
                >
-                 <ChevronRight className="w-4 h-4 text-slate-400" />
+                 <ChevronRight className={STYLES.yearNavIcon} />
                </button>
              </div>
            )}
@@ -596,25 +701,25 @@ export default function Calendario() {
 
       {cargando ? (
         <div className="card flex items-center justify-center min-h-[400px]">
-          <p className="text-slate-400 text-sm font-bold animate-pulse">Cargando datos...</p>
+          <p className={STYLES.loadingTxt}>Cargando datos...</p>
         </div>
       ) : (
         <>
           {view === 'year' && (
             <>
-               <div className="flex justify-end mb-4">
-                <div className="flex flex-wrap items-center gap-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+               <div className={STYLES.legendRow}>
+                <div className={STYLES.legendItems}>
                   <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-blue-500" />
+                    <span className={STYLES.legendDotBlue} />
                     <span>Con Cirugías</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-slate-300" />
+                    <span className={STYLES.legendDotSlate} />
                     <span>Libre</span>
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className={STYLES.monthGrid}>
                 {statsMeses.map((mes) => (
                   <button
                     key={mes.indice}
@@ -622,41 +727,41 @@ export default function Calendario() {
                       setSelectedMonth(mes.indice)
                       setView('month')
                     }}
-                    className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-6 flex flex-col justify-between text-left hover:border-blue-300 hover:shadow-md transition-all group"
+                    className={STYLES.monthCard}
                   >
-                    <div className="flex items-start justify-between mb-4 w-full">
+                    <div className={STYLES.monthCardTop}>
                       <div>
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">
+                        <p className={STYLES.monthCirCount}>
                           {mes.cirugiasEstimadas} cirugía{mes.cirugiasEstimadas !== 1 ? 's' : ''}
                         </p>
-                        <h2 className="text-xl font-black text-slate-900 mt-1 group-hover:text-blue-600 transition-colors">{mes.nombre}</h2>
+                        <h2 className={STYLES.monthName}>{mes.nombre}</h2>
                       </div>
                       <div className="text-right">
-                        <p className="text-xl font-black text-blue-600">{mes.porcentajeOcupado}%</p>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                        <p className={STYLES.monthPct}>{mes.porcentajeOcupado}%</p>
+                        <p className={STYLES.monthOccupied}>
                           Ocupado
                         </p>
                       </div>
                     </div>
 
                     <div className="mt-4 w-full">
-                      <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full flex">
+                      <div className={STYLES.monthBarBg}>
+                        <div className={STYLES.monthBarFlex}>
                           {mes.porcentajeOcupado > 0 && (
                             <div
-                              className="bg-blue-500"
+                              className={STYLES.monthBarBlue}
                               style={{ width: `${mes.porcentajeOcupado}%` }}
                             />
                           )}
                           {mes.porcentajeLibre > 0 && (
                             <div
-                              className="bg-slate-300"
+                              className={STYLES.monthBarSlate}
                               style={{ width: `${mes.porcentajeLibre}%` }}
                             />
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center justify-between mt-3 text-[11px] font-bold text-slate-500">
+                      <div className={STYLES.monthBarBottom}>
                         <span>{mes.porcentajeLibre}% libre</span>
                       </div>
                     </div>
@@ -716,14 +821,14 @@ export default function Calendario() {
                 {cirugiaACancelar.patients?.nombre} {cirugiaACancelar.patients?.apellido}
               </span>?
             </p>
-            <div className="bg-slate-50 rounded-xl p-4 space-y-2">
-              <p className="text-sm text-slate-600">
+            <div className={STYLES.cancelInfoBox}>
+              <p className={STYLES.cancelInfoTxt}>
                 <span className="font-bold">Fecha:</span> {format(new Date(cirugiaACancelar.fecha), 'dd/MM/yyyy')}
               </p>
-              <p className="text-sm text-slate-600">
+              <p className={STYLES.cancelInfoTxt}>
                 <span className="font-bold">Hora:</span> {cirugiaACancelar.hora_inicio} - {cirugiaACancelar.hora_fin}
               </p>
-              <p className="text-sm text-slate-600">
+              <p className={STYLES.cancelInfoTxt}>
                 <span className="font-bold">Pabellón:</span> {cirugiaACancelar.operating_rooms?.nombre}
               </p>
             </div>

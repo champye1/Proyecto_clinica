@@ -2,9 +2,10 @@
  * Servicio de notificaciones.
  * Centraliza todas las operaciones sobre la tabla notifications.
  */
-import { supabase } from '../config/supabase'
-import { logger } from '../utils/logger'
-import { NotificationListSchema } from '../schemas/notification.schema'
+import { supabase } from '@/config/supabase'
+import { logger } from '@/utils/logger'
+import { NotificationListSchema } from '@/schemas/notification.schema'
+import { getMyClinicaId } from '@/utils/getClinicaId'
 
 /**
  * Obtiene las notificaciones de un usuario (más recientes primero).
@@ -91,10 +92,13 @@ export async function markAllAsRead(userId) {
  * @returns {Promise<{data: object|null, error: object|null}>}
  */
 export async function createNotification(notification) {
+  const clinicaId = await getMyClinicaId()
+
   const { data, error } = await supabase
     .from('notifications')
     .insert({
       ...notification,
+      clinica_id: clinicaId,
       vista: false,
       created_at: new Date().toISOString(),
     })

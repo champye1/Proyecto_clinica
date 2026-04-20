@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../../config/supabase'
+import { supabase } from '@/config/supabase'
 import {
   Clock,
   Activity,
@@ -24,15 +24,15 @@ import {
 } from 'lucide-react'
 import { format, subDays, eachDayOfInterval } from 'date-fns'
 import { es } from 'date-fns/locale'
-import Card from '../../components/common/Card'
-import OcupacionChart from '../../components/charts/OcupacionChart'
-import { useNotifications } from '../../hooks/useNotifications'
-import { CardSkeleton, MetricSkeleton } from '../../components/common/Skeleton'
-import Tooltip from '../../components/common/Tooltip'
-import Modal from '../../components/common/Modal'
-import { useTheme } from '../../contexts/ThemeContext'
-import { sanitizeString } from '../../utils/sanitizeInput'
-import { logger } from '../../utils/logger'
+import Card from '@/components/common/Card'
+import OcupacionChart from '@/components/charts/OcupacionChart'
+import { useNotifications } from '@/hooks/useNotifications'
+import { CardSkeleton, MetricSkeleton } from '@/components/common/Skeleton'
+import Tooltip from '@/components/common/Tooltip'
+import Modal from '@/components/common/Modal'
+import { useTheme } from '@/contexts/ThemeContext'
+import { sanitizeString, safeParseJSON } from '@/utils/sanitizeInput'
+import { logger } from '@/utils/logger'
 
 export default function Dashboard() {
   const { theme } = useTheme()
@@ -282,7 +282,7 @@ export default function Dashboard() {
     try {
       const guardado = localStorage.getItem('recordatorio-temporal')
       if (guardado) {
-        return JSON.parse(guardado)
+        return safeParseJSON(guardado) ?? { titulo: '', contenido: '' }
       }
     } catch (e) {
       logger.errorWithContext('Error al cargar recordatorio temporal', e)
@@ -317,7 +317,7 @@ export default function Dashboard() {
       if (error) throw error
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['recordatorios-pabellon'])
+      queryClient.invalidateQueries({ queryKey: ['recordatorios-pabellon'] })
       setNuevoRecordatorio({ titulo: '', contenido: '' })
       // Limpiar localStorage después de crear exitosamente
       localStorage.removeItem('recordatorio-temporal')
@@ -343,7 +343,7 @@ export default function Dashboard() {
       if (error) throw error
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['recordatorios-pabellon'])
+      queryClient.invalidateQueries({ queryKey: ['recordatorios-pabellon'] })
       showSuccess('Recordatorio marcado como realizado')
     },
     onError: (error) => {
@@ -366,7 +366,7 @@ export default function Dashboard() {
       if (error) throw error
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['recordatorios-pabellon'])
+      queryClient.invalidateQueries({ queryKey: ['recordatorios-pabellon'] })
       showSuccess('Recordatorio eliminado')
     },
     onError: (error) => {

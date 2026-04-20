@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { supabase } from '../config/supabase'
-import { logger } from '../utils/logger'
+import { supabase } from '@/config/supabase'
+import { logger } from '@/utils/logger'
 import { useNotifications } from './useNotifications'
 
 const BACKOFF_INITIAL_MS = 10_000
@@ -24,11 +24,11 @@ export function useRealtimeNotifications(userId) {
 
   // Invalida todas las queries relacionadas con notificaciones/cirugías
   const invalidateAll = useCallback(() => {
-    queryClient.invalidateQueries(['notifications'])
-    queryClient.invalidateQueries(['unread-notifications-count'])
-    queryClient.invalidateQueries(['cirugias-hoy'])
-    queryClient.invalidateQueries(['cirugias-calendario'])
-    queryClient.invalidateQueries(['solicitudes-pendientes'])
+    queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    queryClient.invalidateQueries({ queryKey: ['unread-notifications-count'] })
+    queryClient.invalidateQueries({ queryKey: ['cirugias-hoy'] })
+    queryClient.invalidateQueries({ queryKey: ['cirugias-calendario'] })
+    queryClient.invalidateQueries({ queryKey: ['solicitudes-pendientes'] })
   }, [queryClient])
 
   // Reinicia el backoff a su valor inicial y reprograma el timer
@@ -69,8 +69,8 @@ export function useRealtimeNotifications(userId) {
         },
         (payload) => {
           logger.debug('Nueva notificación recibida:', payload.new)
-          queryClient.invalidateQueries(['notifications'])
-          queryClient.invalidateQueries(['unread-notifications-count'])
+          queryClient.invalidateQueries({ queryKey: ['notifications'] })
+          queryClient.invalidateQueries({ queryKey: ['unread-notifications-count'] })
           showInfo(`Nueva notificación: ${payload.new.titulo}`)
           resetBackoff()
         }
@@ -88,9 +88,9 @@ export function useRealtimeNotifications(userId) {
         },
         (payload) => {
           logger.debug('Cambio en solicitud:', payload.new)
-          queryClient.invalidateQueries(['solicitudes'])
-          queryClient.invalidateQueries(['solicitudes-doctor'])
-          queryClient.invalidateQueries(['solicitudes-pendientes'])
+          queryClient.invalidateQueries({ queryKey: ['solicitudes'] })
+          queryClient.invalidateQueries({ queryKey: ['solicitudes-doctor'] })
+          queryClient.invalidateQueries({ queryKey: ['solicitudes-pendientes'] })
           resetBackoff()
 
           if (payload.new.estado === 'aceptada' && payload.old.estado === 'pendiente') {
@@ -113,12 +113,12 @@ export function useRealtimeNotifications(userId) {
         },
         (payload) => {
           logger.debug('Cambio en cirugía:', payload)
-          queryClient.invalidateQueries(['cirugias-hoy'])
-          queryClient.invalidateQueries(['cirugias-calendario'])
-          queryClient.invalidateQueries(['calendario-anual-cirugias'])
-          queryClient.invalidateQueries(['calendario-doctor-cirugias'])
-          queryClient.invalidateQueries(['cirugias-dia-detalle'])
-          queryClient.invalidateQueries(['cirugias-fecha'])
+          queryClient.invalidateQueries({ queryKey: ['cirugias-hoy'] })
+          queryClient.invalidateQueries({ queryKey: ['cirugias-calendario'] })
+          queryClient.invalidateQueries({ queryKey: ['calendario-anual-cirugias'] })
+          queryClient.invalidateQueries({ queryKey: ['calendario-doctor-cirugias'] })
+          queryClient.invalidateQueries({ queryKey: ['cirugias-dia-detalle'] })
+          queryClient.invalidateQueries({ queryKey: ['cirugias-fecha'] })
           resetBackoff()
 
           if (
