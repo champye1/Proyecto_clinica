@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { supabase } from '@/config/supabase'
@@ -10,11 +10,11 @@ import {
   PanelLeftClose, PanelLeftOpen, Stethoscope,
 } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
-import Dashboard from '@/pages/doctor/Dashboard'
-import CrearPaciente from '@/pages/doctor/CrearPaciente'
-import Solicitudes from '@/pages/doctor/Solicitudes'
-import Calendario from '@/pages/doctor/Calendario'
-import HorariosDisponibles from '@/pages/doctor/HorariosDisponibles'
+const Dashboard          = lazy(() => import('@/pages/doctor/Dashboard'))
+const CrearPaciente      = lazy(() => import('@/pages/doctor/CrearPaciente'))
+const Solicitudes        = lazy(() => import('@/pages/doctor/Solicitudes'))
+const Calendario         = lazy(() => import('@/pages/doctor/Calendario'))
+const HorariosDisponibles = lazy(() => import('@/pages/doctor/HorariosDisponibles'))
 import { useRealtimeNotifications } from '@/hooks/useRealtimeNotifications'
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
 import { useNotificationsList } from '@/hooks/useNotificationsList'
@@ -395,14 +395,16 @@ export default function DoctorLayout() {
         </header>
 
         <main className={`${STYLES.mainContent} ${THEME.mainBg[theme]}`}>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/paciente" element={<CrearPaciente />} />
-            <Route path="/solicitudes" element={<Solicitudes />} />
-            <Route path="/horarios" element={<HorariosDisponibles />} />
-            <Route path="/calendario" element={<Calendario />} />
-            <Route path="*" element={<Navigate to="/doctor" />} />
-          </Routes>
+          <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" /></div>}>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/paciente" element={<CrearPaciente />} />
+              <Route path="/solicitudes" element={<Solicitudes />} />
+              <Route path="/horarios" element={<HorariosDisponibles />} />
+              <Route path="/calendario" element={<Calendario />} />
+              <Route path="*" element={<Navigate to="/doctor" />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
 

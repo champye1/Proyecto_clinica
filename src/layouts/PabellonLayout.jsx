@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -12,18 +12,18 @@ import {
   LayoutGrid, UserCog, BarChart2,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import Dashboard from '@/pages/pabellon/dashboard'
-import Solicitudes from '@/pages/pabellon/solicitudes'
-import Calendario from '@/pages/pabellon/calendario'
-import BloqueoHorario from '@/pages/pabellon/BloqueoHorario'
-import Medicos from '@/pages/pabellon/Medicos'
-import Equipo from '@/pages/pabellon/Equipo'
-import Insumos from '@/pages/pabellon/Insumos'
-import Auditoria from '@/pages/pabellon/Auditoria'
-import Correos from '@/pages/pabellon/Correos'
-import Configuracion from '@/pages/pabellon/Configuracion'
-import Facturacion from '@/pages/pabellon/Facturacion'
-import Reportes from '@/pages/pabellon/Reportes'
+const Dashboard     = lazy(() => import('@/pages/pabellon/dashboard'))
+const Solicitudes   = lazy(() => import('@/pages/pabellon/solicitudes'))
+const Calendario    = lazy(() => import('@/pages/pabellon/calendario'))
+const BloqueoHorario = lazy(() => import('@/pages/pabellon/BloqueoHorario'))
+const Medicos       = lazy(() => import('@/pages/pabellon/Medicos'))
+const Equipo        = lazy(() => import('@/pages/pabellon/Equipo'))
+const Insumos       = lazy(() => import('@/pages/pabellon/Insumos'))
+const Auditoria     = lazy(() => import('@/pages/pabellon/Auditoria'))
+const Correos       = lazy(() => import('@/pages/pabellon/Correos'))
+const Configuracion = lazy(() => import('@/pages/pabellon/Configuracion'))
+const Facturacion   = lazy(() => import('@/pages/pabellon/Facturacion'))
+const Reportes      = lazy(() => import('@/pages/pabellon/Reportes'))
 import { useRealtimeNotifications } from '@/hooks/useRealtimeNotifications'
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
 import { useNotificationsList } from '@/hooks/useNotificationsList'
@@ -497,21 +497,23 @@ export default function PabellonLayout() {
         )}
 
         <main className={`${STYLES.mainContent} ${THEME.mainBg[theme]}`}>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/solicitudes" element={<Solicitudes />} />
-            <Route path="/calendario" element={<Calendario />} />
-            <Route path="/bloqueo" element={<BloqueoHorario />} />
-            <Route path="/medicos" element={<Medicos />} />
-            <Route path="/equipo" element={<Equipo />} />
-            <Route path="/insumos" element={<Insumos />} />
-            <Route path="/correos" element={<Correos />} />
-            <Route path="/reportes" element={<Reportes />} />
-            <Route path="/auditoria" element={<Auditoria />} />
-            <Route path="/configuracion" element={<Configuracion />} />
-            <Route path="/facturacion" element={<Facturacion />} />
-            <Route path="*" element={<Navigate to="/pabellon" />} />
-          </Routes>
+          <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" /></div>}>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/solicitudes" element={<Solicitudes />} />
+              <Route path="/calendario" element={<Calendario />} />
+              <Route path="/bloqueo" element={<BloqueoHorario />} />
+              <Route path="/medicos" element={<Medicos />} />
+              <Route path="/equipo" element={<Equipo />} />
+              <Route path="/insumos" element={<Insumos />} />
+              <Route path="/correos" element={<Correos />} />
+              <Route path="/reportes" element={<Reportes />} />
+              <Route path="/auditoria" element={<Auditoria />} />
+              <Route path="/configuracion" element={<Configuracion />} />
+              <Route path="/facturacion" element={<Facturacion />} />
+              <Route path="*" element={<Navigate to="/pabellon" />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
 
