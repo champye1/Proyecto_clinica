@@ -1,21 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
-// =====================================================
 // EDGE FUNCTION: send-whatsapp
-// Envía mensajes WhatsApp via Twilio Sandbox.
-//
-// Secrets requeridos en Supabase Dashboard:
-//   TWILIO_ACCOUNT_SID  → TWILIO_ACCOUNT_SID_PLACEHOLDER
-//   TWILIO_AUTH_TOKEN   → tu auth token
-//   TWILIO_WHATSAPP_FROM → whatsapp:+14155238886
-//
-// Tipos soportados (campo "type"):
-//   solicitud_recibida   → pabellón: nueva solicitud de médico
-//   solicitud_aceptada   → médico: solicitud aceptada
-//   solicitud_rechazada  → médico: solicitud rechazada
-//   cirugia_programada   → médico: cirugía agendada con fecha/hora
-//   reagendamiento       → médico: pabellón necesita reagendar
-// =====================================================
+// Secrets requeridos: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM
 
 const TWILIO_API = (accountSid: string) =>
   `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`
