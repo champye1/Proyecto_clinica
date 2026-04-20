@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/config/supabase'
+import { getCurrentUser } from '@/services/authService'
 import { Calendar, FileText, CheckCircle2, Clock } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -87,7 +88,7 @@ export default function Dashboard() {
   const { data: doctor, isLoading: loadingDoctor, isError: errorDoctor } = useQuery({
     queryKey: ['doctor-actual'],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getCurrentUser()
       if (!user) return null
 
       const { data, error } = await supabase
@@ -174,7 +175,7 @@ export default function Dashboard() {
   const { data: recordatorios = [] } = useQuery({
     queryKey: ['recordatorios-doctor'],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getCurrentUser()
       if (!user) return []
 
       const { data, error } = await supabase

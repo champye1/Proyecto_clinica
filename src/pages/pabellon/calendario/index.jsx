@@ -8,7 +8,10 @@ import {
 } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { supabase } from '@/config/supabase'
-import { getMyClinicaId } from '@/utils/getClinicaId'
+import { scheduleSurgery, rescheduleSurgery, cancelSurgery, fetchSurgeryById, fetchSurgeriesByDateRange, fetchSurgeriesByDay, fetchScheduleBlocksByDateRange } from '@/services/surgeryService'
+import { getDoctorUserIdById } from '@/services/doctorService'
+import { createNotification } from '@/services/notificationService'
+import { fetchRooms } from '@/services/operatingRoomService'
 import { useNotifications } from '@/hooks/useNotifications'
 import { sanitizeString, safeParseJSON } from '@/utils/sanitizeInput'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -288,13 +291,13 @@ export default function Calendario() {
       const horaFinVal = normalize(formData.hora_fin)
       if (!horaInicio?.match(/^\d{2}:\d{2}:\d{2}$/)) throw new Error(`Formato de hora de inicio inválido: ${horaInicio}`)
       if (!horaFinVal?.match(/^\d{2}:\d{2}:\d{2}$/)) throw new Error(`Formato de hora de fin inválido: ${horaFinVal}`)
-      const { data, error } = await supabase.rpc('programar_cirugia_completa', {
-        p_surgery_request_id: solicitudId,
-        p_operating_room_id: formData.operating_room_id,
-        p_fecha: formData.fecha,
-        p_hora_inicio: horaInicio,
-        p_hora_fin: horaFinVal,
-        p_observaciones: formData.observaciones || null,
+      const { data, error } = await scheduleSurgery({
+        surgeryRequestId: solicitudId,
+        operatingRoomId:  formData.operating_room_id,
+        fecha:            formData.fecha,
+        horaInicio,
+        horaFin:          horaFinVal,
+        observaciones:    formData.observaciones || null,
       })
       if (error) throw error
       if (!data?.success) throw new Error(data?.message || 'Error desconocido al programar la cirugía')
@@ -336,10 +339,12 @@ export default function Calendario() {
   const reagendarCirugia = useMutation({
     mutationFn: async ({ cirugiaId, formData }) => {
       const norm = (t) => t?.match(/^\d{1,2}:\d{2}$/) ? (() => { const [h,m]=t.split(':'); return `${h.padStart(2,'0')}:${m.padStart(2,'0')}:00` })() : t
-      const { error } = await supabase
-        .from('surgeries')
-        .update({ fecha: formData.fecha, hora_inicio: norm(formData.hora_inicio), hora_fin: norm(formData.hora_fin), operating_room_id: formData.operating_room_id, updated_at: new Date().toISOString() })
-        .eq('id', cirugiaId)
+      const { error } = await rescheduleSurgery(cirugiaId, {
+        fecha:           formData.fecha,
+        horaInicio:      norm(formData.hora_inicio),
+        horaFin:         norm(formData.hora_fin),
+        operatingRoomId: formData.operating_room_id,
+      })
       if (error) throw error
     },
     onSuccess: () => {
@@ -362,22 +367,19 @@ export default function Calendario() {
 
   const cancelarCirugia = useMutation({
     mutationFn: async (cirugiaId) => {
-      const { data: cirugia, error: errorCirugia } = await supabase
-        .from('surgeries')
-        .select('doctor_id, fecha, hora_inicio, patients:patient_id(nombre, apellido)')
-        .eq('id', cirugiaId)
-        .single()
+      const { data: cirugia, error: errorCirugia } = await fetchSurgeryById(cirugiaId)
       if (errorCirugia) throw errorCirugia
-      const { error } = await supabase.from('surgeries').update({ estado: 'cancelada', updated_at: new Date().toISOString() }).eq('id', cirugiaId)
+      const { error } = await cancelSurgery(cirugiaId)
       if (error) throw error
       if (cirugia.doctor_id) {
-        const { data: doctorUser } = await supabase.from('doctors').select('user_id').eq('id', cirugia.doctor_id).single()
+        const { data: doctorUser } = await getDoctorUserIdById(cirugia.doctor_id)
         if (doctorUser?.user_id) {
-          const clinicaId = await getMyClinicaId()
-          await supabase.from('notifications').insert({
-            user_id: doctorUser.user_id, tipo: 'operacion_programada', titulo: 'Cirugía Cancelada',
+          createNotification({
+            user_id: doctorUser.user_id,
+            tipo:    'operacion_programada',
+            titulo:  'Cirugía Cancelada',
             mensaje: `La cirugía programada para ${cirugia.patients?.nombre} ${cirugia.patients?.apellido} el ${format(new Date(cirugia.fecha), 'dd/MM/yyyy')} a las ${cirugia.hora_inicio} ha sido cancelada por el pabellón.`,
-            relacionado_con: cirugiaId, clinica_id: clinicaId,
+            relacionado_con: cirugiaId,
           })
         }
       }
@@ -449,24 +451,21 @@ export default function Calendario() {
     queryKey: ['calendario-anual-cirugias', anio, filtroPaciente],
     refetchInterval: 10000,
     queryFn: async () => {
-      let query = supabase.from('surgeries').select('id, fecha, operating_room_id, hora_inicio, hora_fin, estado, doctors(apellido), patients:patient_id(nombre, apellido, rut)').is('deleted_at', null)
-      if (!filtroPaciente) {
-        query = query.gte('fecha', fechaInicioStr).lte('fecha', fechaFinStr)
-      } else {
+      let inicio = fechaInicioStr
+      let fin    = fechaFinStr
+      if (filtroPaciente) {
         const inf = new Date(); inf.setFullYear(inf.getFullYear() - 5)
         const sup = new Date(); sup.setFullYear(sup.getFullYear() + 2)
-        query = query.gte('fecha', inf.toISOString().slice(0,10)).lte('fecha', sup.toISOString().slice(0,10))
+        inicio = inf.toISOString().slice(0, 10)
+        fin    = sup.toISOString().slice(0, 10)
       }
-      const { data, error } = await query.order('fecha', { ascending: false })
+      const { data, error } = await fetchSurgeriesByDateRange(inicio, fin)
       if (error) throw error
       if (filtroPaciente && data) {
         const f = filtroPaciente.toLowerCase().trim()
-        return data.filter(c => {
-          const n = `${c.patients?.nombre || ''} ${c.patients?.apellido || ''}`.toLowerCase()
-          return n.includes(f)
-        })
+        return data.filter(c => `${c.patients?.nombre || ''} ${c.patients?.apellido || ''}`.toLowerCase().includes(f))
       }
-      return data || []
+      return data
     },
   })
 
@@ -474,9 +473,9 @@ export default function Calendario() {
     queryKey: ['calendario-anual-bloqueos', anio],
     refetchInterval: 10000,
     queryFn: async () => {
-      const { data, error } = await supabase.from('schedule_blocks').select('id, fecha, operating_room_id, hora_inicio, hora_fin, vigencia_hasta').gte('fecha', fechaInicioStr).lte('fecha', fechaFinStr).is('deleted_at', null)
+      const { data, error } = await fetchScheduleBlocksByDateRange(fechaInicioStr, fechaFinStr)
       if (error) throw error
-      return data || []
+      return data
     },
   })
 
@@ -485,13 +484,13 @@ export default function Calendario() {
     refetchInterval: 10000,
     queryFn: async () => {
       if (!selectedDay) return []
-      const { data, error } = await supabase.from('surgeries').select('*, doctors:doctor_id(nombre, apellido, especialidad), patients:patient_id(nombre, apellido, rut), operating_rooms:operating_room_id(nombre), surgery_request_id, surgery_requests:surgery_request_id(codigo_operacion)').eq('fecha', format(selectedDay, 'yyyy-MM-dd')).is('deleted_at', null).order('hora_inicio', { ascending: true })
+      const { data, error } = await fetchSurgeriesByDay(format(selectedDay, 'yyyy-MM-dd'))
       if (error) throw error
       if (filtroPaciente && data) {
         const f = filtroPaciente.toLowerCase().trim()
         return data.filter(c => `${c.patients?.nombre || ''} ${c.patients?.apellido || ''}`.toLowerCase().includes(f))
       }
-      return data || []
+      return data
     },
     enabled: !!selectedDay && view === 'day',
   })
@@ -499,7 +498,7 @@ export default function Calendario() {
   const { data: pabellones = [] } = useQuery({
     queryKey: ['pabellones-calendario'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('operating_rooms').select('id, nombre').eq('activo', true).is('deleted_at', null).order('nombre')
+      const { data, error } = await fetchRooms()
       if (error) throw error
       return data
     },

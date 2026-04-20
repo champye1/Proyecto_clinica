@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/config/supabase'
+import { getCurrentUser } from '@/services/authService'
+import { notifyRescheduleToPabellon } from '@/services/surgeryService'
 import { getMyClinicaId } from '@/utils/getClinicaId'
 import { Clock, CheckCircle2, XCircle, Edit, X, Package, CalendarClock } from 'lucide-react'
 import { format } from 'date-fns'
@@ -92,7 +94,7 @@ export default function Solicitudes() {
   const { data: doctor } = useQuery({
     queryKey: ['doctor-actual'],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getCurrentUser()
       if (!user) return null
 
       const { data, error } = await supabase
@@ -353,9 +355,7 @@ export default function Solicitudes() {
   // Notificar a pabellón que el paciente/doctor solicitó reagendamiento (vía RPC)
   const solicitarReagendamiento = useMutation({
     mutationFn: async (solicitud) => {
-      const { data, error } = await supabase.rpc('notificar_reagendamiento_a_pabellon', {
-        p_surgery_request_id: solicitud.id,
-      })
+      const { data, error } = await notifyRescheduleToPabellon(solicitud.id)
       if (error) throw error
       if (!data?.success) throw new Error('No se pudo enviar la notificación')
       return data

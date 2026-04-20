@@ -18,6 +18,7 @@ import Modal from '@/components/common/Modal'
 import { motion } from 'framer-motion'
 import { emailSolicitudRechazada, emailCirugiaProgramada, emailReagendamiento } from '@/services/emailService'
 import { createNotification } from '@/services/notificationService'
+import { scheduleSurgery } from '@/services/surgeryService'
 import { notifyDoctorSolicitudRechazada, notifyDoctorCirugiaProgramada, notifyDoctorReagendamiento } from '@/services/whatsappService'
 import { STYLES } from './solicitudes.styles'
 import SolicitudCard from './SolicitudCard'
@@ -287,13 +288,13 @@ export default function Solicitudes() {
   const programarCirugia = useMutation({
     mutationFn: async ({ solicitudId, formData }) => {
       const normalizar = (h) => h.includes(':') && h.length === 5 ? `${h}:00` : h
-      const { data, error } = await supabase.rpc('programar_cirugia_completa', {
-        p_surgery_request_id: solicitudId,
-        p_operating_room_id:  formData.operating_room_id,
-        p_fecha:              formData.fecha,
-        p_hora_inicio:        normalizar(formData.hora_inicio),
-        p_hora_fin:           normalizar(formData.hora_fin),
-        p_observaciones:      formData.observaciones || null,
+      const { data, error } = await scheduleSurgery({
+        surgeryRequestId: solicitudId,
+        operatingRoomId:  formData.operating_room_id,
+        fecha:            formData.fecha,
+        horaInicio:       normalizar(formData.hora_inicio),
+        horaFin:          normalizar(formData.hora_fin),
+        observaciones:    formData.observaciones || null,
       })
       if (error) { logger.errorWithContext('Error al programar cirugía', error); throw error }
       if (!data?.success) throw new Error(data?.message || 'Error desconocido al programar la cirugía')
@@ -309,9 +310,9 @@ export default function Solicitudes() {
         emailCirugiaProgramada(solicitudProgramando, formProgramacion, pabNombre)
         createNotification({
           user_id: solicitudProgramando.doctors?.user_id,
-          title:   'Cirugía programada',
-          message: `Su cirugía para ${solicitudProgramando.patients?.nombre} ${solicitudProgramando.patients?.apellido} fue programada el ${formProgramacion.fecha} a las ${formProgramacion.hora_inicio}.`,
-          type:    'cirugia_programada',
+          titulo:  'Cirugía programada',
+          mensaje: `Su cirugía para ${solicitudProgramando.patients?.nombre} ${solicitudProgramando.patients?.apellido} fue programada el ${formProgramacion.fecha} a las ${formProgramacion.hora_inicio}.`,
+          tipo:    'cirugia_programada',
         })
         notifyDoctorCirugiaProgramada({
           telefono:       solicitudProgramando.doctors?.telefono,
@@ -365,13 +366,13 @@ export default function Solicitudes() {
         base.setHours(base.getHours() + 1)
         horaFinNorm = `${String(base.getHours()).padStart(2, '0')}:${String(base.getMinutes()).padStart(2, '0')}:00`
       }
-      const { data, error } = await supabase.rpc('programar_cirugia_completa', {
-        p_surgery_request_id: solicitudId,
-        p_operating_room_id:  operatingRoomId,
-        p_fecha:              fecha,
-        p_hora_inicio:        horaInicioNorm,
-        p_hora_fin:           horaFinNorm,
-        p_observaciones:      null,
+      const { data, error } = await scheduleSurgery({
+        surgeryRequestId: solicitudId,
+        operatingRoomId,
+        fecha,
+        horaInicio: horaInicioNorm,
+        horaFin:    horaFinNorm,
+        observaciones: null,
       })
       if (error) { logger.errorWithContext('Error al programar con horario del médico', error); throw error }
       if (!data?.success) throw new Error(data?.message || 'Error desconocido al programar la cirugía con el horario del médico')
@@ -391,9 +392,9 @@ export default function Solicitudes() {
         )
         createNotification({
           user_id: solicitudAceptandoHorario.doctors?.user_id,
-          title:   'Cirugía programada',
-          message: `Pabellón aceptó su horario propuesto para ${solicitudAceptandoHorario.patients?.nombre} ${solicitudAceptandoHorario.patients?.apellido}. Fecha: ${vars.fecha}.`,
-          type:    'cirugia_programada',
+          titulo:  'Cirugía programada',
+          mensaje: `Pabellón aceptó su horario propuesto para ${solicitudAceptandoHorario.patients?.nombre} ${solicitudAceptandoHorario.patients?.apellido}. Fecha: ${vars.fecha}.`,
+          tipo:    'cirugia_programada',
         })
         notifyDoctorCirugiaProgramada({
           telefono:       solicitudAceptandoHorario.doctors?.telefono,
@@ -469,9 +470,9 @@ export default function Solicitudes() {
         )
         createNotification({
           user_id: solicitudAceptandoHorario.doctors?.user_id,
-          title:   'Cirugía reagendada',
-          message: `Su cirugía para ${solicitudAceptandoHorario.patients?.nombre} ${solicitudAceptandoHorario.patients?.apellido} fue reagendada para el ${vars.fecha}.`,
-          type:    'cirugia_programada',
+          titulo:  'Cirugía reagendada',
+          mensaje: `Su cirugía para ${solicitudAceptandoHorario.patients?.nombre} ${solicitudAceptandoHorario.patients?.apellido} fue reagendada para el ${vars.fecha}.`,
+          tipo:    'cirugia_programada',
         })
         notifyDoctorReagendamiento({
           telefono:       solicitudAceptandoHorario.doctors?.telefono,

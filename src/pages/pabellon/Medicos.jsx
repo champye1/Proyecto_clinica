@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/config/supabase'
 import { Plus, Search, Download, FileSpreadsheet } from 'lucide-react'
+import { listDoctors, createDoctor, updateDoctor, updateDoctorPassword, checkDoctorEmailExists, toggleDoctorAccess, toggleDoctorStatus, deleteDoctor } from '@/services/doctorService'
 import { formatRut, cleanRut, validateRut } from '@/utils/rutFormatter'
 import { useNotifications } from '@/hooks/useNotifications'
 import toast from 'react-hot-toast'
@@ -68,7 +68,7 @@ export default function Medicos() {
   const { data: medicos = [], isLoading } = useQuery({
     queryKey: ['medicos'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('doctors').select('*').is('deleted_at', null).order('apellido', { ascending: true })
+      const { data, error } = await listDoctors()
       if (error) throw error
       return data
     },
@@ -167,10 +167,7 @@ export default function Medicos() {
       if (!ESPECIALIDADES.includes(normalizedData.especialidad)) throw new Error(`Especialidad inválida: ${normalizedData.especialidad}`)
       const rutPattern = /^[0-9]{7,8}-[0-9kK]{1}$/
       if (!rutPattern.test(normalizedData.rut)) throw new Error('Formato de RUT inválido. Debe ser: 12345678-9')
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('No hay sesión activa')
-      const { data: functionData, error: functionError } = await supabase.functions.invoke('create-doctor', { body: normalizedData, headers: { Authorization: `Bearer ${session.access_token}` } })
-      if (functionError) { logger.errorWithContext('Error al invocar Edge Function create-doctor', functionError, { functionData }); throw new Error(functionError.message || 'Error al invocar Edge Function') }
+      const functionData = await createDoctor(normalizedData)
       if (!functionData) throw new Error('Respuesta vacía de la Edge Function')
       if (!functionData.success) throw new Error(functionData.error || 'Error al crear médico')
       return { ...functionData.doctor, tempPassword: functionData.tempPassword }
@@ -195,18 +192,15 @@ export default function Medicos() {
   const actualizarMedico = useMutation({
     mutationFn: async ({ id, data, password }) => {
       if (data.email && medicoEditando && data.email !== medicoEditando.email) {
-        const { data: medicoExistente, error: errorBusqueda } = await supabase.from('doctors').select('id').eq('email', data.email.toLowerCase().trim()).neq('id', id).is('deleted_at', null).maybeSingle()
+        const { data: medicoExistente, error: errorBusqueda } = await checkDoctorEmailExists(data.email, id)
         if (errorBusqueda) throw errorBusqueda
         if (medicoExistente) throw new Error('El email ya está registrado para otro médico')
       }
       if (password) {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session) throw new Error('No hay sesión activa')
-        const { data: functionData, error: functionError } = await supabase.functions.invoke('update-doctor-password', { body: { doctorId: id, password } })
-        if (functionError) { logger.errorWithContext('Error invocando update-doctor-password', functionError); throw new Error(functionError.message || 'Error al actualizar contraseña') }
+        const functionData = await updateDoctorPassword(id, password)
         if (functionData?.error) throw new Error(functionData.error)
       }
-      const { error } = await supabase.from('doctors').update(data).eq('id', id)
+      const { error } = await updateDoctor(id, data)
       if (error) throw error
     },
     onSuccess: (_data, variables) => {
@@ -224,7 +218,7 @@ export default function Medicos() {
 
   const toggleAccesoWeb = useMutation({
     mutationFn: async ({ id, acceso_web_enabled }) => {
-      const { error } = await supabase.from('doctors').update({ acceso_web_enabled }).eq('id', id)
+      const { error } = await toggleDoctorAccess(id, acceso_web_enabled)
       if (error) throw error
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['medicos'] }),
@@ -232,8 +226,7 @@ export default function Medicos() {
 
   const toggleEstado = useMutation({
     mutationFn: async ({ id, estado }) => {
-      const nuevoEstado = estado === 'activo' ? 'vacaciones' : 'activo'
-      const { error } = await supabase.from('doctors').update({ estado: nuevoEstado }).eq('id', id)
+      const { error, nuevoEstado } = await toggleDoctorStatus(id, estado)
       if (error) throw error
       return nuevoEstado
     },
@@ -246,10 +239,7 @@ export default function Medicos() {
 
   const eliminarMedico = useMutation({
     mutationFn: async (id) => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('No hay sesión activa')
-      const { data: functionData, error: functionError } = await supabase.functions.invoke('delete-doctor', { body: { doctorId: id }, headers: { Authorization: `Bearer ${session.access_token}` } })
-      if (functionError) { logger.errorWithContext('Error al invocar Edge Function delete-doctor', functionError); throw new Error(functionError.message || 'Error al eliminar médico') }
+      const functionData = await deleteDoctor(id)
       if (!functionData) throw new Error('Respuesta vacía de la Edge Function')
       if (!functionData.success) throw new Error(functionData.error || 'Error al eliminar médico')
       return functionData

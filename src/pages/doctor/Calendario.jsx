@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/config/supabase'
+import { getCurrentUser } from '@/services/authService'
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, CheckCircle, Info, XCircle } from 'lucide-react'
 import { useNotifications } from '@/hooks/useNotifications'
 import Modal from '@/components/common/Modal'
@@ -509,7 +510,7 @@ export default function Calendario() {
   const { data: doctor } = useQuery({
     queryKey: ['doctor-actual'],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getCurrentUser()
       if (!user) return null
 
       const { data, error } = await supabase

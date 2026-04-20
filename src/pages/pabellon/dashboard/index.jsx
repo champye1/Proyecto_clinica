@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/config/supabase'
+import { getCurrentUser } from '@/services/authService'
 import { format, subDays } from 'date-fns'
 import { Inbox, PhoneCall, Download } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -81,7 +82,7 @@ export default function Dashboard() {
   const { data: ordenesNotificaciones = [], refetch: refetchOrdenes } = useQuery({
     queryKey: ['ordenes-sin-agendar-notifs'],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getCurrentUser()
       if (!user) return []
       const { data, error } = await supabase
         .from('notifications')
@@ -98,7 +99,7 @@ export default function Dashboard() {
   })
 
   const marcarOrdenesVistas = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { user } = await getCurrentUser()
     if (!user || ordenesNotificaciones.length === 0) return
     await supabase
       .from('notifications')
