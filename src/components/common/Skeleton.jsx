@@ -13,7 +13,7 @@ const STYLES = {
 /** Placeholder de tarjeta genérica mientras carga contenido largo (texto + CTA). */
 export function CardSkeleton() {
   return (
-    <div className={STYLES.card}>
+    <div className={STYLES.card} role="status" aria-label="Cargando...">
       <SkeletonLoader height={24} width="60%" className="mb-4" />
       <SkeletonLoader height={16} count={3} className="mb-2" />
       <SkeletonLoader height={40} width="40%" />
@@ -24,7 +24,7 @@ export function CardSkeleton() {
 /** Placeholder de tarjeta de métrica KPI (círculo + título + valor). */
 export function MetricSkeleton() {
   return (
-    <div className={STYLES.metric}>
+    <div className={STYLES.metric} role="status" aria-label="Cargando métrica...">
       <SkeletonLoader circle width={56} height={56} />
       <div className={STYLES.flex1}>
         <SkeletonLoader height={12} width="40%" className="mb-2" />
@@ -40,7 +40,7 @@ export function MetricSkeleton() {
  */
 export function TableSkeleton({ rows = 5 }) {
   return (
-    <div className={STYLES.tableWrap}>
+    <div className={STYLES.tableWrap} role="status" aria-label="Cargando tabla...">
       {Array.from({ length: rows }).map((_, i) => (
         <div key={i} className={STYLES.tableRow}>
           <SkeletonLoader height={60} width="100%" />

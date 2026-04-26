@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { supabase } from '@/config/supabase'
+import { createContactMessage } from '@/services/externalMessageService'
 import { Stethoscope, Send, CheckCircle2, AlertCircle } from 'lucide-react'
 import { sanitizeString } from '@/utils/sanitizeInput'
 
@@ -92,7 +92,7 @@ export default function ContactoExterno() {
 
     setEnviando(true)
     try {
-      const { error: dbError } = await supabase.from('external_messages').insert({
+      const { error: dbError } = await createContactMessage({
         nombre_remitente:       form.nombre_remitente.trim(),
         email_remitente:        form.email_remitente.trim().toLowerCase(),
         telefono_remitente:     form.telefono_remitente.trim() || null,

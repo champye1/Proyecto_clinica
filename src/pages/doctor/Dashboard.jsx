@@ -1,10 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/config/supabase'
+import { getDoctorByUserId } from '@/services/doctorService'
+import { fetchSurgeriesForDoctor } from '@/services/surgeryService'
+import { fetchPendingRequestsByDoctor } from '@/services/surgeryRequestService'
+import { fetchReminders } from '@/services/reminderService'
 import { getCurrentUser } from '@/services/authService'
 import { Calendar, FileText, CheckCircle2, Clock } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useTheme } from '@/contexts/ThemeContext'
+import { tc } from '@/constants/theme'
 import { MetricSkeleton, CardSkeleton } from '@/components/common/Skeleton'
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
@@ -91,12 +95,7 @@ export default function Dashboard() {
       const { user } = await getCurrentUser()
       if (!user) return null
 
-      const { data, error } = await supabase
-        .from('doctors')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle()
-      
+      const { data, error } = await getDoctorByUserId(user.id)
       if (error) throw error
       return data
     },
@@ -107,18 +106,7 @@ export default function Dashboard() {
     queryFn: async () => {
       if (!doctor) return []
 
-      const { data, error } = await supabase
-        .from('surgeries')
-        .select(`
-          *,
-          patients:patient_id(nombre, apellido, rut),
-          operating_rooms:operating_room_id(nombre)
-        `)
-        .eq('doctor_id', doctor.id)
-        .eq('fecha', format(new Date(), 'yyyy-MM-dd'))
-        .is('deleted_at', null)
-        .order('hora_inicio', { ascending: true })
-      
+      const { data, error } = await fetchSurgeriesForDoctor(doctor.id, { fecha: format(new Date(), 'yyyy-MM-dd') })
       if (error) throw error
       return data
     },
@@ -129,18 +117,7 @@ export default function Dashboard() {
     queryKey: ['solicitudes-doctor-pendientes'],
     queryFn: async () => {
       if (!doctor) return []
-
-      const { data, error } = await supabase
-        .from('surgery_requests')
-        .select(`
-          *,
-          patients:patient_id(nombre, apellido)
-        `)
-        .eq('doctor_id', doctor.id)
-        .eq('estado', 'pendiente')
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
-      
+      const { data, error } = await fetchPendingRequestsByDoctor(doctor.id)
       if (error) throw error
       return data
     },
@@ -151,21 +128,7 @@ export default function Dashboard() {
     queryKey: ['cirugias-doctor-confirmadas'],
     queryFn: async () => {
       if (!doctor) return []
-
-      const { data, error } = await supabase
-        .from('surgeries')
-        .select(`
-          *,
-          patients:patient_id(nombre, apellido),
-          operating_rooms:operating_room_id(nombre)
-        `)
-        .eq('doctor_id', doctor.id)
-        .gte('fecha', format(new Date(), 'yyyy-MM-dd'))
-        .is('deleted_at', null)
-        .order('fecha', { ascending: true })
-        .order('hora_inicio', { ascending: true })
-        .limit(5)
-      
+      const { data, error } = await fetchSurgeriesForDoctor(doctor.id, { limit: 5 })
       if (error) throw error
       return data
     },
@@ -175,22 +138,9 @@ export default function Dashboard() {
   const { data: recordatorios = [] } = useQuery({
     queryKey: ['recordatorios-doctor'],
     queryFn: async () => {
-      const { user } = await getCurrentUser()
-      if (!user) return []
-
-      const { data, error } = await supabase
-        .from('reminders')
-        .select('*')
-        .eq('user_id', user.id)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
-        .limit(10)
-      
-      if (error) {
-        logger.errorWithContext('Error al obtener recordatorios', error)
-        return []
-      }
-      return data || []
+      const { data, error } = await fetchReminders({ limit: 10 })
+      if (error) { logger.errorWithContext('Error al obtener recordatorios', error); return [] }
+      return data
     },
   })
 
@@ -198,28 +148,14 @@ export default function Dashboard() {
     queryKey: ['cirugias-aceptadas-doctor'],
     queryFn: async () => {
       if (!doctor) return []
-
-      const { data, error } = await supabase
-        .from('surgeries')
-        .select(`
-          *,
-          patients:patient_id(nombre, apellido, rut),
-          operating_rooms:operating_room_id(nombre),
-          surgery_requests:surgery_request_id(codigo_operacion)
-        `)
-        .eq('doctor_id', doctor.id)
-        .gte('fecha', format(new Date(), 'yyyy-MM-dd'))
-        .is('deleted_at', null)
-        .order('fecha', { ascending: true })
-        .order('hora_inicio', { ascending: true })
-        .limit(5)
-      
+      const { data, error } = await fetchSurgeriesForDoctor(doctor.id, { limit: 5 })
       if (error) throw error
       return data
     },
     enabled: !!doctor,
   })
 
+  const t = tc(theme)
   const isDark = theme === 'dark'
 
   if (loadingDoctor) {

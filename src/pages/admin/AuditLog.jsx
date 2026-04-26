@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ScrollText, RefreshCw, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react'
-import { supabase } from '@/config/supabase'
+import { getAuditLogs } from '@/services/adminService'
 import { formatDistanceToNow, format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useDebounce } from '@/hooks/useDebounce'
@@ -56,11 +56,11 @@ export default function AuditLog() {
   const { data = [], isLoading, refetch } = useQuery({
     queryKey: ['audit-logs', page, fechaDesde, fechaHasta],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_audit_logs_admin', {
-        p_limit:       PAGE_SIZE,
-        p_offset:      page * PAGE_SIZE,
-        p_fecha_desde: fechaDesde ? new Date(fechaDesde).toISOString() : null,
-        p_fecha_hasta: fechaHasta ? new Date(fechaHasta + 'T23:59:59').toISOString() : null,
+      const { data, error } = await getAuditLogs({
+        page,
+        limit: PAGE_SIZE,
+        fechaDesde: fechaDesde ? new Date(fechaDesde).toISOString() : null,
+        fechaHasta: fechaHasta ? new Date(fechaHasta + 'T23:59:59').toISOString() : null,
       })
       if (error) throw error
       return data ?? []

@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, CheckCircle2, Trash2, MessageSquare } from 'lucide-react'
 import { format } from 'date-fns'
-import { supabase } from '@/config/supabase'
+import { fetchReminders, createReminder, markReminderRead, deleteReminder } from '@/services/reminderService'
 import Card from '@/components/common/Card'
 import { useNotifications } from '@/hooks/useNotifications'
 import { useTheme } from '@/contexts/ThemeContext'
+import { tc } from '@/constants/theme'
 import { sanitizeString, safeParseJSON } from '@/utils/sanitizeInput'
 import { logger } from '@/utils/logger'
 
@@ -54,8 +55,9 @@ export default function DashboardReminders() {
   const { theme } = useTheme()
   const { showSuccess, showError } = useNotifications()
   const queryClient = useQueryClient()
+  const t = tc(theme)
   const isDark = theme === 'dark'
-  const isDarkOrMedical = isDark || theme === 'medical'
+  const isDarkOrMedical = theme !== 'light'
 
   const [nuevoRecordatorio, setNuevoRecordatorio] = useState(() => {
     try {
@@ -78,15 +80,7 @@ export default function DashboardReminders() {
   const { data: recordatorios = [] } = useQuery({
     queryKey: ['recordatorios-pabellon'],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return []
-      const { data, error } = await supabase
-        .from('reminders')
-        .select('*')
-        .eq('user_id', user.id)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
-        .limit(10)
+      const { data, error } = await fetchReminders({ limit: 10 })
       if (error) throw error
       return data
     },
@@ -94,14 +88,7 @@ export default function DashboardReminders() {
 
   const crearRecordatorio = useMutation({
     mutationFn: async (data) => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Usuario no autenticado')
-      const { error } = await supabase.from('reminders').insert({
-        user_id: user.id,
-        titulo: data.titulo,
-        contenido: data.contenido,
-        tipo: 'aviso',
-      })
+      const { error } = await createReminder({ titulo: data.titulo, contenido: data.contenido, tipo: 'aviso' })
       if (error) throw error
     },
     onSuccess: () => {
@@ -122,7 +109,7 @@ export default function DashboardReminders() {
 
   const marcarVisto = useMutation({
     mutationFn: async (id) => {
-      const { error } = await supabase.from('reminders').update({ visto: true }).eq('id', id)
+      const { error } = await markReminderRead(id)
       if (error) throw error
     },
     onSuccess: () => {
@@ -134,10 +121,7 @@ export default function DashboardReminders() {
 
   const eliminar = useMutation({
     mutationFn: async (id) => {
-      const { error } = await supabase
-        .from('reminders')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', id)
+      const { error } = await deleteReminder(id)
       if (error) throw error
     },
     onSuccess: () => {

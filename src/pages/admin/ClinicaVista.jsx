@@ -5,7 +5,7 @@ import {
   Clock, Calendar, AlertTriangle, CheckCircle2, XCircle,
   Eye, Activity,
 } from 'lucide-react'
-import { supabase } from '@/config/supabase'
+import { getImpersonationData } from '@/services/adminService'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -76,7 +76,7 @@ export default function ClinicaVista() {
   const { data, isLoading } = useQuery({
     queryKey: ['clinica-vista', id],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_impersonation_data', { p_clinica_id: id })
+      const { data, error } = await getImpersonationData(id)
       if (error) throw error
       return data
     },

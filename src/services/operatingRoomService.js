@@ -117,10 +117,57 @@ export async function deleteRoom(roomId) {
   return { error }
 }
 
-/**
- * Obtiene todas las salas (activas e inactivas) para configuración.
- * @returns {Promise<{data: object[], error: object|null}>}
- */
+export async function fetchDashboardOccupancy(fecha) {
+  const [{ data: cirugias }, { data: bloqueos }, { data: pabellones }] = await Promise.all([
+    supabase.from('surgeries').select('operating_room_id').eq('fecha', fecha).is('deleted_at', null).in('estado', ['programada', 'en_proceso']),
+    supabase.from('schedule_blocks').select('operating_room_id').eq('fecha', fecha).is('deleted_at', null).or(`vigencia_hasta.is.null,vigencia_hasta.gte.${fecha}`),
+    supabase.from('operating_rooms').select('id').eq('activo', true).is('deleted_at', null),
+  ])
+  const total = pabellones?.length || 0
+  const ids = new Set([...(cirugias?.map(c => c.operating_room_id) || []), ...(bloqueos?.map(b => b.operating_room_id) || [])])
+  return {
+    data: {
+      totalPabellones: total,
+      pabellonesOcupados: ids.size,
+      porcentajeOcupacion: total > 0 ? Math.round((ids.size / total) * 100) : 0,
+      totalCirugias: cirugias?.length || 0,
+    },
+    error: null,
+  }
+}
+
+export async function fetchWeeklyUtilization(fechaInicio, fechaFin) {
+  const [{ data: cirugias }, { data: pabellones }] = await Promise.all([
+    supabase.from('surgeries').select('operating_room_id, fecha').gte('fecha', fechaInicio).lte('fecha', fechaFin).is('deleted_at', null).in('estado', ['programada', 'en_proceso', 'completada']),
+    supabase.from('operating_rooms').select('id').eq('activo', true).is('deleted_at', null),
+  ])
+  const totalPabellones = pabellones?.length || 0
+  const dias = Math.round((new Date(fechaFin) - new Date(fechaInicio)) / (1000 * 60 * 60 * 24)) + 1
+  const slotsTotales = totalPabellones * dias * 12
+  const slotsOcupados = new Set(cirugias?.map(c => `${c.operating_room_id}-${c.fecha}`) || []).size
+  return {
+    data: {
+      porcentaje: slotsTotales > 0 ? Math.round((slotsOcupados / slotsTotales) * 100) : 0,
+      slotsOcupados,
+      slotsTotales,
+    },
+    error: null,
+  }
+}
+
+export async function fetchAvgSurgeryDuration(fechaInicio) {
+  const { data: cirugias, error } = await supabase
+    .from('surgeries')
+    .select('hora_inicio, hora_fin')
+    .gte('fecha', fechaInicio)
+    .is('deleted_at', null)
+    .in('estado', ['completada'])
+  if (error) { logger.errorWithContext('operatingRoomService.fetchAvgSurgeryDuration', error); return { data: 0, error } }
+  if (!cirugias?.length) return { data: 0, error: null }
+  const tiempos = cirugias.map(c => (new Date(`2000-01-01T${c.hora_fin}`) - new Date(`2000-01-01T${c.hora_inicio}`)) / 60000)
+  return { data: Math.round(tiempos.reduce((a, b) => a + b, 0) / tiempos.length), error: null }
+}
+
 export async function fetchAllRooms() {
   const { data, error } = await supabase
     .from('operating_rooms')

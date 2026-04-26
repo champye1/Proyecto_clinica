@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { Building2, Check, Star, Zap, ArrowRight, Users, LayoutGrid, AlertTriangle } from 'lucide-react'
 import { supabase } from '@/config/supabase'
+import { choosePlan } from '@/services/onboardingService'
 
 // ─── Datos ────────────────────────────────────────────────────────────────────
 const PLANES_CONFIG = [
@@ -99,6 +100,7 @@ export default function ElegirPlan() {
   const [selected, setSelected] = useState(null)
   const [loading, setLoading] = useState(false)
   const [loadingPlanes, setLoadingPlanes] = useState(true)
+  const [planError, setPlanError] = useState(null)
 
   useEffect(() => {
     supabase
@@ -117,11 +119,12 @@ export default function ElegirPlan() {
   const handleContinuar = async () => {
     if (!selected) return
     setLoading(true)
+    setPlanError(null)
     try {
-      await supabase.rpc('actualizar_plan_clinica', { p_plan_id: selected })
+      await choosePlan(selected)
       navigate('/bienvenida', { replace: true })
-    } catch {
-      navigate('/bienvenida', { replace: true })
+    } catch (err) {
+      setPlanError(err?.message || 'Error al guardar el plan. Intenta nuevamente.')
     } finally {
       setLoading(false)
     }
@@ -236,6 +239,13 @@ export default function ElegirPlan() {
             )
           })}
         </div>
+
+        {planError && (
+          <div className="mb-4 flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            {planError}
+          </div>
+        )}
 
         <div className={STYLES.ctaWrap}>
           <button

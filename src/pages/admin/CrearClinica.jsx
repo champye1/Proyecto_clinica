@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Building2, CheckCircle2, AlertCircle } from 'lucide-react'
-import { supabase } from '@/config/supabase'
+import { fetchPlans, createClinic } from '@/services/adminService'
 import { sanitizeString } from '@/utils/sanitizeInput'
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
@@ -57,18 +57,14 @@ export default function CrearClinica() {
   const { data: planes = [] } = useQuery({
     queryKey: ['planes-list'],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('planes')
-        .select('id, nombre, precio_mensual_usd')
-        .eq('activo', true)
-        .order('precio_mensual_usd')
+      const { data } = await fetchPlans()
       return data ?? []
     },
   })
 
   const crearClinica = useMutation({
     mutationFn: async (formData) => {
-      const { data, error } = await supabase.rpc('admin_crear_clinica', {
+      const { data, error } = await createClinic({
         p_nombre:         formData.nombre,
         p_rut:            formData.rut || null,
         p_ciudad:         formData.ciudad,

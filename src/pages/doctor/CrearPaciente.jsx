@@ -1,8 +1,14 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/config/supabase'
 import { getMyClinicaId } from '@/utils/getClinicaId'
+import { getCurrentUser } from '@/services/authService'
+import { getDoctorByUserId } from '@/services/doctorService'
+import { fetchActiveSupplies, fetchOperationPacks } from '@/services/supplyService'
+import { fetchRooms } from '@/services/operatingRoomService'
+import { findPatientByRut, createPatient, updatePatient } from '@/services/patientService'
+import { createRequest, addRequestSupplies } from '@/services/surgeryRequestService'
+import { createNotification } from '@/services/notificationService'
 import { UserPlus, AlertCircle, Ban } from 'lucide-react'
 import { formatRut, cleanRut, validateRut, isValidRutFormat } from '@/utils/rutFormatter'
 import { sanitizeString, sanitizeRut } from '@/utils/sanitizeInput'
@@ -10,6 +16,7 @@ import SearchableSelect from '@/components/SearchableSelect'
 import { codigosOperaciones, getGrupoFonasaByCodigo, insumoAplicaParaGrupo } from '@/data/codigosOperaciones'
 import { useNotifications } from '@/hooks/useNotifications'
 import { useTheme } from '@/contexts/ThemeContext'
+import { tc } from '@/constants/theme'
 import ConfirmModal from '@/components/common/ConfirmModal'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import { format } from 'date-fns'
@@ -42,6 +49,7 @@ export default function CrearPaciente() {
   const queryClient = useQueryClient()
   const { showError, showSuccess } = useNotifications()
   const { theme } = useTheme()
+  const t = tc(theme)
   const location = useLocation()
   const navigate = useNavigate()
   const isDark = theme === 'dark'
@@ -71,9 +79,9 @@ export default function CrearPaciente() {
   const { data: doctor } = useQuery({
     queryKey: ['doctor-actual'],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { user } = await getCurrentUser()
       if (!user) return null
-      const { data, error } = await supabase.from('doctors').select('id, estado, nombre, apellido').eq('user_id', user.id).single()
+      const { data, error } = await getDoctorByUserId(user.id)
       if (error) throw error
       return data
     },
@@ -82,7 +90,7 @@ export default function CrearPaciente() {
   const { data: insumos = [] } = useQuery({
     queryKey: ['insumos'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('supplies').select('id, nombre, codigo, grupo_prestacion, grupos_fonasa').eq('activo', true).is('deleted_at', null).order('nombre', { ascending: true })
+      const { data, error } = await fetchActiveSupplies()
       if (error) throw error
       return data
     },
@@ -91,9 +99,9 @@ export default function CrearPaciente() {
   const { data: pabellonesList = [] } = useQuery({
     queryKey: ['operating-rooms-crear'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('operating_rooms').select('id, nombre').eq('activo', true).is('deleted_at', null).order('nombre')
+      const { data, error } = await fetchRooms()
       if (error) throw error
-      return data || []
+      return data
     },
   })
 
@@ -102,7 +110,7 @@ export default function CrearPaciente() {
     queryFn: async () => {
       if (!formData.codigo_operacion) return { packItems: [], recommendedSupplyIds: [] }
       try {
-        const { data: rows, error } = await supabase.from('operation_supply_packs').select('supply_id, cantidad, supplies(id, nombre, codigo)').eq('codigo_operacion', formData.codigo_operacion)
+        const { data: rows, error } = await fetchOperationPacks(formData.codigo_operacion)
         if (error) return { packItems: [], recommendedSupplyIds: [] }
         const packItems = (rows || []).filter(r => r.supplies).map(r => ({ supply_id: r.supply_id, nombre: r.supplies.nombre, codigo: r.supplies.codigo, cantidad: Math.max(0, Number(r.cantidad) || 0) }))
         return { packItems, recommendedSupplyIds: packItems.map(p => p.supply_id) }
@@ -143,19 +151,19 @@ export default function CrearPaciente() {
       if (!doctor) throw new Error('Doctor no encontrado')
       const clinicaId = await getMyClinicaId()
 
-      const { data: pacienteExistente, error: errorBusqueda } = await supabase.from('patients').select('id, nombre, apellido').eq('doctor_id', doctor.id).eq('rut', cleanRut(data.rut)).is('deleted_at', null).maybeSingle()
+      const { data: pacienteExistente, error: errorBusqueda } = await findPatientByRut(doctor.id, cleanRut(data.rut))
       if (errorBusqueda) throw errorBusqueda
 
       let paciente
       if (pacienteExistente) {
         paciente = pacienteExistente
         if (pacienteExistente.nombre !== data.nombre || pacienteExistente.apellido !== data.apellido) {
-          const { error: updateError } = await supabase.from('patients').update({ nombre: data.nombre, apellido: data.apellido, updated_at: new Date().toISOString() }).eq('id', pacienteExistente.id)
+          const { error: updateError } = await updatePatient(pacienteExistente.id, { nombre: data.nombre, apellido: data.apellido })
           if (updateError) throw updateError
           paciente = { ...pacienteExistente, nombre: data.nombre, apellido: data.apellido }
         }
       } else {
-        const { data: nuevoPaciente, error: pacienteError } = await supabase.from('patients').insert({ doctor_id: doctor.id, nombre: data.nombre, apellido: data.apellido, rut: cleanRut(data.rut), clinica_id: clinicaId }).select().single()
+        const { data: nuevoPaciente, error: pacienteError } = await createPatient({ doctor_id: doctor.id, nombre: data.nombre, apellido: data.apellido, rut: cleanRut(data.rut), clinica_id: clinicaId })
         if (pacienteError) throw pacienteError
         paciente = nuevoPaciente
       }
@@ -175,19 +183,23 @@ export default function CrearPaciente() {
         operating_room_id_preferido_2: dejarAPabellon ? null : (data.operating_room_id_preferido_2 || null),
         horarios_preferidos_extra: (data.horarios_extra?.length ? data.horarios_extra : null),
       }
-      const { data: solicitud, error: solicitudError } = await supabase.from('surgery_requests').insert(payloadSolicitud).select().single()
+      const { data: solicitud, error: solicitudError } = await createRequest(payloadSolicitud)
       if (solicitudError) throw solicitudError
 
       if (data.insumos?.length > 0) {
-        const { error: insumosError } = await supabase.from('surgery_request_supplies').insert(data.insumos.map(insumo => ({ surgery_request_id: solicitud.id, supply_id: insumo.supply_id, cantidad: insumo.cantidad, clinica_id: clinicaId })))
+        const { error: insumosError } = await addRequestSupplies(solicitud.id, data.insumos, clinicaId)
         if (insumosError) throw insumosError
       }
 
       try {
-        const { data: pabellonUsers } = await supabase.from('users').select('id').eq('role', 'pabellon').is('deleted_at', null)
-        if (pabellonUsers?.length > 0) {
-          await supabase.from('notifications').insert(pabellonUsers.map(u => ({ user_id: u.id, clinica_id: clinicaId, tipo: 'orden_sin_agendar', titulo: 'Nueva orden de cirugía sin agendar', mensaje: `Dr. ${doctor.nombre} ${doctor.apellido} tiene un paciente pendiente de agendamiento: ${data.nombre} ${data.apellido} — ${data.codigo_operacion}`, relacionado_con: solicitud.id })))
-        }
+        await createNotification({
+          tipo: 'orden_sin_agendar',
+          titulo: 'Nueva orden de cirugía sin agendar',
+          mensaje: `Dr. ${doctor.nombre} ${doctor.apellido} tiene un paciente pendiente de agendamiento: ${data.nombre} ${data.apellido} — ${data.codigo_operacion}`,
+          relacionado_con: solicitud.id,
+          clinica_id: clinicaId,
+          target_role: 'pabellon',
+        })
       } catch { /* no bloquear si falla la notificación */ }
 
       return { paciente, solicitud }
@@ -265,7 +277,7 @@ export default function CrearPaciente() {
 
   return (
     <div className="space-y-6">
-      <h1 className={isDark ? 'text-3xl font-bold text-white' : 'text-3xl font-bold text-gray-900'}>Crear Ficha de Paciente</h1>
+      <h1 className={`text-3xl font-bold ${t.textPrimary}`}>Crear Ficha de Paciente</h1>
 
       {estaEnVacaciones && (
         <div className="card bg-amber-50 border-2 border-amber-200">

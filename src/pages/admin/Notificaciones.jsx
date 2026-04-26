@@ -4,7 +4,7 @@ import {
   Bell, Plus, Send, Trash2, RefreshCw, Users, Stethoscope,
   Building2, Globe, Info, AlertTriangle, CheckCircle2, XCircle,
 } from 'lucide-react'
-import { supabase } from '@/config/supabase'
+import { getAllBroadcasts, sendBroadcast, deactivateBroadcast } from '@/services/adminService'
 import { format, formatDistanceToNow } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -69,7 +69,7 @@ export default function Notificaciones() {
   const { data: notifs = [], isPending, isError, refetch } = useQuery({
     queryKey: ['broadcast-admin'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_all_broadcast_admin')
+      const { data, error } = await getAllBroadcasts()
       if (error) throw error
       return data ?? []
     },
@@ -78,7 +78,7 @@ export default function Notificaciones() {
 
   const enviar = useMutation({
     mutationFn: async (f) => {
-      const { error } = await supabase.rpc('admin_send_broadcast', {
+      const { error } = await sendBroadcast({
         p_titulo:     f.titulo.trim(),
         p_mensaje:    f.mensaje.trim(),
         p_tipo:       f.tipo,
@@ -97,7 +97,7 @@ export default function Notificaciones() {
 
   const desactivar = useMutation({
     mutationFn: async (id) => {
-      const { error } = await supabase.rpc('admin_desactivar_broadcast', { p_id: id })
+      const { error } = await deactivateBroadcast(id)
       if (error) throw error
     },
     onSuccess: () => {

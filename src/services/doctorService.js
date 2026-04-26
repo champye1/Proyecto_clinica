@@ -1,5 +1,6 @@
 import { supabase } from '@/config/supabase'
 import { logger } from '@/utils/logger'
+import { DoctorListSchema } from '@/schemas/doctor.schema'
 
 export async function listDoctors() {
   const { data, error } = await supabase
@@ -7,7 +8,10 @@ export async function listDoctors() {
     .select('*')
     .is('deleted_at', null)
     .order('apellido', { ascending: true })
-  return { data: data ?? [], error }
+  if (error) { logger.errorWithContext('doctorService.listDoctors', error); return { data: [], error } }
+  const validation = DoctorListSchema.safeParse(data)
+  if (!validation.success) logger.errorWithContext('[schema] doctorService.listDoctors', validation.error)
+  return { data: data ?? [], error: null }
 }
 
 export async function getDoctorByUserId(userId) {

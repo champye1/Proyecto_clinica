@@ -13,6 +13,7 @@ import { exportToCSV, exportToExcel } from '@/utils/exportData'
 import ConfirmModal from '@/components/common/ConfirmModal'
 import { TableSkeleton } from '@/components/common/Skeleton'
 import { useTheme } from '@/contexts/ThemeContext'
+import { tc } from '@/constants/theme'
 import MedicoForm from './medicos/MedicoForm'
 import MedicosTable from './medicos/MedicosTable'
 
@@ -41,6 +42,7 @@ export default function Medicos() {
   const { showSuccess, showError, showInfo } = useNotifications()
   const debouncedBusqueda = useDebounce(busqueda, 300)
   const { theme } = useTheme()
+  const t = tc(theme)
   const isDark = theme === 'dark'
 
   const notifyDoctorAction = (type, doctorName, details = null) => {
@@ -303,7 +305,7 @@ export default function Medicos() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className={isDark ? 'text-2xl sm:text-3xl font-bold text-white' : 'text-2xl sm:text-3xl font-bold text-gray-900'}>Gestión de Médicos</h1>
+        <h1 className={`text-2xl sm:text-3xl font-bold ${t.textPrimary}`}>Gestión de Médicos</h1>
         <div className="flex flex-wrap gap-2">
           {medicosFiltrados.length > 0 && (
             <>

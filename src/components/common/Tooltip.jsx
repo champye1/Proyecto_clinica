@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion'
  */
 export default function Tooltip({ children, content, position = 'top' }) {
   const [isVisible, setIsVisible] = useState(false)
+  const tooltipId = `tooltip-${Math.random().toString(36).slice(2, 9)}`
 
   const positionClasses = {
     top: 'bottom-full left-1/2 -translate-x-1/2 mb-2',
@@ -31,11 +32,16 @@ export default function Tooltip({ children, content, position = 'top' }) {
       className={STYLES.wrapper}
       onMouseEnter={() => setIsVisible(true)}
       onMouseLeave={() => setIsVisible(false)}
+      onFocus={() => setIsVisible(true)}
+      onBlur={() => setIsVisible(false)}
+      aria-describedby={isVisible ? tooltipId : undefined}
     >
       {children}
       <AnimatePresence>
         {isVisible && (
           <motion.div
+            id={tooltipId}
+            role="tooltip"
             initial={{ opacity: 0, y: position === 'top' ? 5 : -5 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: position === 'top' ? 5 : -5 }}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Shield, Eye, EyeOff, CheckCircle2, AlertTriangle, Lock, Mail } from 'lucide-react'
-import { supabase } from '@/config/supabase'
+import { checkSuperAdminExists, signUpClinica, setupSuperAdminRecord } from '@/services/onboardingService'
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
@@ -78,7 +78,7 @@ export default function SetupAdmin() {
 
   // Verificar si ya hay un super admin
   useEffect(() => {
-    supabase.rpc('check_super_admin_exists')
+    checkSuperAdminExists()
       .then(({ data, error }) => {
         if (!error) setExists(Boolean(data))
         setChecking(false)
@@ -100,11 +100,11 @@ export default function SetupAdmin() {
     setLoading(true)
     try {
       // Paso 1 — Crear usuario en Supabase Auth
-      const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
-        email: email.trim().toLowerCase(),
+      const { data: signUpData, error: signUpErr } = await signUpClinica(
+        email.trim().toLowerCase(),
         password,
-        options: { data: { role: 'super_admin' } },
-      })
+        { metadata: { role: 'super_admin' } }
+      )
 
       if (signUpErr) {
         if (signUpErr.message?.includes('already registered')) {
@@ -130,10 +130,7 @@ export default function SetupAdmin() {
       }
 
       // Paso 2 — Registrar como super_admin en public.users
-      const { error: rpcErr } = await supabase.rpc('setup_super_admin_record', {
-        p_user_id: userId,
-        p_email: email.trim().toLowerCase(),
-      })
+      const { error: rpcErr } = await setupSuperAdminRecord(userId, email.trim().toLowerCase())
 
       if (rpcErr) {
         setGlobalErr(rpcErr.message || 'Error al asignar el rol de administrador.')

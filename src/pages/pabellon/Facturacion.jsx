@@ -1,12 +1,15 @@
-import { useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useState, useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import {
   CreditCard, Check, Star, Zap, Building2, ArrowRight,
   AlertCircle, CheckCircle2, Calendar, Loader2,
 } from 'lucide-react'
 import { supabase } from '@/config/supabase'
+import { getCurrentSession } from '@/services/authService'
 import { useClinicaInfo, useTrialStatus } from '@/hooks/useClinicaInfo'
 import { useTheme } from '@/contexts/ThemeContext'
+import { tc } from '@/constants/theme'
 
 const PLANES_CONFIG = [
   {
@@ -73,11 +76,28 @@ const STYLES = {
 
 export default function Facturacion() {
   const { theme } = useTheme()
+  const queryClient = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { data: clinicaInfo } = useClinicaInfo()
   const trial = useTrialStatus(clinicaInfo)
   const [loadingPlan, setLoadingPlan] = useState(null)
   const [checkoutError, setCheckoutError] = useState(null)
   const [checkoutSuccess, setCheckoutSuccess] = useState(false)
+
+  // Detectar retorno desde Stripe Checkout
+  useEffect(() => {
+    const result = searchParams.get('checkout')
+    if (result === 'success') {
+      setCheckoutSuccess(true)
+      // Invalidar para reflejar el nuevo estado del plan
+      queryClient.invalidateQueries({ queryKey: ['clinica-info'] })
+      queryClient.invalidateQueries({ queryKey: ['planes-facturacion'] })
+      setSearchParams({}, { replace: true })
+    } else if (result === 'cancelled') {
+      setCheckoutError('El pago fue cancelado. Puedes intentarlo nuevamente.')
+      setSearchParams({}, { replace: true })
+    }
+  }, [searchParams, setSearchParams, queryClient])
 
   const { data: planes = [] } = useQuery({
     queryKey: ['planes-facturacion'],
@@ -91,17 +111,17 @@ export default function Facturacion() {
     },
   })
 
+  const t = tc(theme)
   const isDark = theme === 'dark'
-  const isMedical = theme === 'medical'
-  const title = isDark ? 'text-white' : 'text-slate-900'
-  const label = isDark ? 'text-slate-400' : 'text-slate-500'
-  const card = isDark ? 'bg-slate-800 border-slate-700' : isMedical ? 'bg-white border-blue-100' : 'bg-white border-slate-200'
+  const title = t.textPrimary
+  const label = t.textMuted
+  const card  = `${t.cardBg} ${t.border}`
 
   const handleCheckout = async (planId, planNombre) => {
     setLoadingPlan(planId)
     setCheckoutError(null)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
+      const { session } = await getCurrentSession()
       const token = session?.access_token
       if (!token) throw new Error('Sin sesión activa')
 

@@ -1,4 +1,5 @@
 import SearchableSelect from '@/components/SearchableSelect'
+import { tc } from '@/constants/theme'
 import { Package } from 'lucide-react'
 import { sanitizeNumber } from '@/utils/sanitizeInput'
 
@@ -26,6 +27,7 @@ export default function InsumosSection({
   insumosDisponibles, grupoFonasa, packData,
   agregarInsumo, eliminarInsumo, theme,
 }) {
+  const t = tc(theme)
   const isDark = theme === 'dark'
 
   return (
@@ -57,6 +59,7 @@ export default function InsumosSection({
           className={S.insumosQty}
           min="1"
           placeholder="Cant."
+          aria-label="Cantidad de insumo"
         />
         <button type="button" onClick={agregarInsumo} className={S.insumosAddBtn} disabled={!insumoSeleccionado}>
           Agregar

@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Building2, User, Phone, ChevronDown, Lock, Eye, EyeOff, AlertCircle, CheckCircle2 } from 'lucide-react'
-import { supabase } from '@/config/supabase'
+import {
+  getSession, updatePassword, signUpInvitedUser,
+  createUserRecord, createDoctorRecord, updateUserRecord, markInvitationUsedById,
+  checkInvitationCode,
+} from '@/services/onboardingService'
 import { sanitizeString } from '@/utils/sanitizeInput'
 import { ESPECIALIDADES_CHILE } from '@/constants/especialidades'
 
@@ -56,17 +60,7 @@ const STYLES = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 async function validarCodigo(codigo) {
-  const { data, error } = await supabase
-    .from('invitaciones')
-    .select('id, rol, clinica_id, email, usado, activo, expires_at')
-    .eq('codigo', codigo.trim().toUpperCase())
-    .single()
-
-  if (error || !data)          return { valido: false, error: 'Código no encontrado. Verifica que esté bien escrito.' }
-  if (data.usado)              return { valido: false, error: 'Este código ya fue utilizado.' }
-  if (data.activo === false)   return { valido: false, error: 'Esta invitación ha sido desactivada. Solicita una nueva al administrador.' }
-  if (new Date(data.expires_at) < new Date()) return { valido: false, error: 'El código expiró. Solicita uno nuevo al administrador.' }
-  return { valido: true, invitacion: data }
+  return checkInvitationCode(codigo)
 }
 
 export default function RegistroInvitacion() {
@@ -128,19 +122,19 @@ export default function RegistroInvitacion() {
     setLoading(true)
     setPaso('completando')
     try {
-      const { data: { session } } = await supabase.auth.getSession()
+      const { session } = await getSession()
       let userId
 
       if (session) {
         userId = session.user.id
-        const { error: passError } = await supabase.auth.updateUser({ password: form.password })
+        const { error: passError } = await updatePassword(form.password)
         if (passError) throw passError
       } else {
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: invitacion.email,
-          password: form.password,
-          options: { emailRedirectTo: `${window.location.origin}/acceso` },
-        })
+        const { data: signUpData, error: signUpError } = await signUpInvitedUser(
+          invitacion.email,
+          form.password,
+          { redirectTo: `${window.location.origin}/acceso` }
+        )
         if (signUpError) throw signUpError
         if (!signUpData.user)    throw new Error('No se pudo crear la cuenta.')
         if (!signUpData.session) throw new Error('Confirma tu email para continuar. Revisa tu bandeja de entrada.')
@@ -150,7 +144,7 @@ export default function RegistroInvitacion() {
       const nombre   = sanitizeString(form.nombre.trim())
       const apellido = sanitizeString(form.apellido.trim())
 
-      const { error: userError } = await supabase.from('users').insert({
+      const { error: userError } = await createUserRecord({
         id: userId,
         email: invitacion.email,
         role: invitacion.rol,
@@ -160,7 +154,7 @@ export default function RegistroInvitacion() {
       if (userError && userError.code !== '23505') throw userError
 
       if (invitacion.rol === 'doctor') {
-        const { error: doctorError } = await supabase.from('doctors').insert({
+        const { error: doctorError } = await createDoctorRecord({
           user_id: userId,
           nombre,
           apellido,
@@ -174,14 +168,10 @@ export default function RegistroInvitacion() {
       }
 
       if (form.telefono.trim()) {
-        await supabase.from('users')
-          .update({ telefono: sanitizeString(form.telefono.trim()) })
-          .eq('id', userId)
+        await updateUserRecord(userId, { telefono: sanitizeString(form.telefono.trim()) })
       }
 
-      await supabase.from('invitaciones')
-        .update({ usado: true, usado_por: userId })
-        .eq('id', invitacion.id)
+      await markInvitationUsedById(invitacion.id, userId)
 
       await new Promise(r => setTimeout(r, 300))
       navigate(invitacion.rol === 'doctor' ? '/doctor' : '/pabellon', { replace: true })
@@ -241,14 +231,16 @@ export default function RegistroInvitacion() {
               )}
 
               <div className={STYLES.codeMb}>
-                <label className={STYLES.label}>Código de invitación</label>
+                <label htmlFor="inv-codigo" className={STYLES.label}>Código de invitación</label>
                 <input
+                  id="inv-codigo"
                   value={codigoInput}
                   onChange={e => { setCodigoInput(e.target.value.toUpperCase()); setErrorCodigo(null) }}
                   onKeyDown={e => e.key === 'Enter' && handleValidarCodigo(codigoInput)}
                   placeholder="XXXX-XXXX"
                   className={STYLES.codeInput}
                   maxLength={9}
+                  aria-describedby={errorCodigo ? 'inv-codigo-error' : undefined}
                 />
               </div>
 
@@ -288,32 +280,32 @@ export default function RegistroInvitacion() {
 
               <div className={STYLES.grid2gap3}>
                 <div>
-                  <label className={STYLES.label}>Nombre *</label>
+                  <label htmlFor="inv-nombre" className={STYLES.label}>Nombre *</label>
                   <div className={STYLES.inputWrap}>
                     <User className={STYLES.inputIcon} />
                     <input
-                      name="nombre" required value={form.nombre} onChange={handleChange}
+                      id="inv-nombre" name="nombre" required value={form.nombre} onChange={handleChange}
                       className={STYLES.inputWithIcon}
                     />
                   </div>
                 </div>
                 <div>
-                  <label className={STYLES.label}>Apellido *</label>
+                  <label htmlFor="inv-apellido" className={STYLES.label}>Apellido *</label>
                   <input
-                    name="apellido" required value={form.apellido} onChange={handleChange}
+                    id="inv-apellido" name="apellido" required value={form.apellido} onChange={handleChange}
                     className={STYLES.input}
                   />
                 </div>
               </div>
 
               <div>
-                <label className={STYLES.label}>
+                <label htmlFor="inv-telefono" className={STYLES.label}>
                   Teléfono <span className={STYLES.optionalLabel}>(opcional)</span>
                 </label>
                 <div className={STYLES.inputWrap}>
                   <Phone className={STYLES.inputIcon} />
                   <input
-                    name="telefono" type="tel" value={form.telefono} onChange={handleChange}
+                    id="inv-telefono" name="telefono" type="tel" value={form.telefono} onChange={handleChange}
                     placeholder="+56 9 XXXX XXXX"
                     className={STYLES.inputWithIcon}
                   />
@@ -322,10 +314,10 @@ export default function RegistroInvitacion() {
 
               {invitacion.rol === 'doctor' && (
                 <div>
-                  <label className={STYLES.label}>Especialidad *</label>
+                  <label htmlFor="inv-especialidad" className={STYLES.label}>Especialidad *</label>
                   <div className={STYLES.inputWrap}>
                     <select
-                      name="especialidad" required value={form.especialidad} onChange={handleChange}
+                      id="inv-especialidad" name="especialidad" required value={form.especialidad} onChange={handleChange}
                       className={STYLES.select}
                     >
                       <option value="">Selecciona tu especialidad</option>
@@ -349,11 +341,11 @@ export default function RegistroInvitacion() {
               )}
 
               <div>
-                <label className={STYLES.label}>Contraseña *</label>
+                <label htmlFor="inv-password" className={STYLES.label}>Contraseña *</label>
                 <div className={STYLES.inputWrap}>
                   <Lock className={STYLES.inputIcon} />
                   <input
-                    name="password" type={showPassword ? 'text' : 'password'} required
+                    id="inv-password" name="password" type={showPassword ? 'text' : 'password'} required
                     value={form.password} onChange={handleChange}
                     placeholder="Mínimo 8 caracteres"
                     className={STYLES.inputWithBtn}
@@ -368,11 +360,11 @@ export default function RegistroInvitacion() {
               </div>
 
               <div>
-                <label className={STYLES.label}>Confirmar contraseña *</label>
+                <label htmlFor="inv-confirm-password" className={STYLES.label}>Confirmar contraseña *</label>
                 <div className={STYLES.inputWrap}>
                   <Lock className={STYLES.inputIcon} />
                   <input
-                    name="confirmPassword" type={showPassword ? 'text' : 'password'} required
+                    id="inv-confirm-password" name="confirmPassword" type={showPassword ? 'text' : 'password'} required
                     value={form.confirmPassword} onChange={handleChange}
                     placeholder="Repite la contraseña"
                     className={STYLES.inputWithIcon}

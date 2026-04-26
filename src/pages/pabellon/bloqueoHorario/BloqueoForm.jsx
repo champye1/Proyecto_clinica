@@ -1,4 +1,5 @@
 import { Clock, CheckCircle, XCircle, Lock } from 'lucide-react'
+import { tc } from '@/constants/theme'
 import { sanitizeString, sanitizeNumber } from '@/utils/sanitizeInput'
 import { HORAS_SELECT } from '@/utils/horasOpciones'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
@@ -46,6 +47,7 @@ const S = {
 }
 
 export default function BloqueoForm({ formData, setFormData, bloqueoEditando, doctores, pabellones, estadoPorHora, handleSubmit, cancelarEdicion, isCreating, isUpdating, theme }) {
+  const t = tc(theme)
   const isDark = theme === 'dark'
 
   return (
@@ -63,24 +65,24 @@ export default function BloqueoForm({ formData, setFormData, bloqueoEditando, do
 
       <form onSubmit={handleSubmit} className={S.formBody}>
         <div>
-          <label className={S.formLabel}>Doctor (Opcional)</label>
-          <select value={formData.doctor_id} onChange={(e) => setFormData({ ...formData, doctor_id: sanitizeString(e.target.value) })} className={S.formInput}>
+          <label htmlFor="bloqueo-doctor" className={S.formLabel}>Doctor (Opcional)</label>
+          <select id="bloqueo-doctor" value={formData.doctor_id} onChange={(e) => setFormData({ ...formData, doctor_id: sanitizeString(e.target.value) })} className={S.formInput}>
             <option value="">Seleccionar doctor...</option>
             {doctores.map(doctor => <option key={doctor.id} value={doctor.id}>{doctor.nombre} {doctor.apellido}</option>)}
           </select>
         </div>
 
         <div>
-          <label className={S.formLabel}>Pabellón *</label>
-          <select value={formData.operating_room_id} onChange={(e) => setFormData({ ...formData, operating_room_id: sanitizeString(e.target.value) })} className={S.formInput} required>
+          <label htmlFor="bloqueo-pabellon" className={S.formLabel}>Pabellón *</label>
+          <select id="bloqueo-pabellon" value={formData.operating_room_id} onChange={(e) => setFormData({ ...formData, operating_room_id: sanitizeString(e.target.value) })} className={S.formInput} required>
             <option value="">Seleccionar pabellón...</option>
             {pabellones.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
           </select>
         </div>
 
         <div>
-          <label className={S.formLabel}>Fecha *</label>
-          <input type="date" value={formData.fecha} onChange={(e) => setFormData({ ...formData, fecha: sanitizeString(e.target.value) })} className={S.formInputFull} required min={new Date().toISOString().split('T')[0]} />
+          <label htmlFor="bloqueo-fecha" className={S.formLabel}>Fecha *</label>
+          <input id="bloqueo-fecha" type="date" value={formData.fecha} onChange={(e) => setFormData({ ...formData, fecha: sanitizeString(e.target.value) })} className={S.formInputFull} required min={new Date().toISOString().split('T')[0]} />
           <p className={isDark ? S.dateHintDark : S.dateHintLight}>Elija fecha y pabellón para ver abajo los horarios disponibles u ocupados.</p>
         </div>
 
@@ -116,16 +118,16 @@ export default function BloqueoForm({ formData, setFormData, bloqueoEditando, do
 
         <div className={S.formGrid2}>
           <div>
-            <label className={S.formLabel}>Hora Inicio *</label>
-            <select value={formData.hora_inicio ? String(formData.hora_inicio).slice(0, 5) : ''} onChange={(e) => setFormData({ ...formData, hora_inicio: e.target.value })} className={S.formInputFull} required>
+            <label htmlFor="bloqueo-hora-inicio" className={S.formLabel}>Hora Inicio *</label>
+            <select id="bloqueo-hora-inicio" value={formData.hora_inicio ? String(formData.hora_inicio).slice(0, 5) : ''} onChange={(e) => setFormData({ ...formData, hora_inicio: e.target.value })} className={S.formInputFull} required>
               <option value="">Seleccione hora</option>
               {HORAS_SELECT.map(h => <option key={h} value={h}>{h}</option>)}
             </select>
             <p className={isDark ? S.horaHintDark : S.horaHintLight}>Solo hora (sin minutos)</p>
           </div>
           <div>
-            <label className={S.formLabel}>Hora Fin *</label>
-            <select value={formData.hora_fin ? String(formData.hora_fin).slice(0, 5) : ''} onChange={(e) => setFormData({ ...formData, hora_fin: e.target.value })} className={S.formInputFull} required>
+            <label htmlFor="bloqueo-hora-fin" className={S.formLabel}>Hora Fin *</label>
+            <select id="bloqueo-hora-fin" value={formData.hora_fin ? String(formData.hora_fin).slice(0, 5) : ''} onChange={(e) => setFormData({ ...formData, hora_fin: e.target.value })} className={S.formInputFull} required>
               <option value="">Seleccione hora</option>
               {HORAS_SELECT.filter(h => !formData.hora_inicio || h > formData.hora_inicio).map(h => <option key={h} value={h}>{h}</option>)}
             </select>
@@ -134,14 +136,14 @@ export default function BloqueoForm({ formData, setFormData, bloqueoEditando, do
         </div>
 
         <div>
-          <label className={S.formLabel}>Motivo</label>
-          <textarea value={formData.motivo} onChange={(e) => setFormData({ ...formData, motivo: sanitizeString(e.target.value) })} className={S.formInput} rows="3" maxLength={500} />
+          <label htmlFor="bloqueo-motivo" className={S.formLabel}>Motivo</label>
+          <textarea id="bloqueo-motivo" value={formData.motivo} onChange={(e) => setFormData({ ...formData, motivo: sanitizeString(e.target.value) })} className={S.formInput} rows="3" maxLength={500} />
           <p className={isDark ? S.charCountDark : S.charCountLight}>{formData.motivo.length}/500 caracteres</p>
         </div>
 
         <div>
-          <label className={S.formLabel}>Días límite de vigencia (Opcional)</label>
-          <input type="number" min={1} max={365} value={formData.dias_limite_vigencia} onChange={(e) => setFormData({ ...formData, dias_limite_vigencia: sanitizeNumber(e.target.value).slice(0, 3) })} className={S.formInput} placeholder="Ej: 5" />
+          <label htmlFor="bloqueo-vigencia" className={S.formLabel}>Días límite de vigencia (Opcional)</label>
+          <input id="bloqueo-vigencia" type="number" min={1} max={365} value={formData.dias_limite_vigencia} onChange={(e) => setFormData({ ...formData, dias_limite_vigencia: sanitizeNumber(e.target.value).slice(0, 3) })} className={S.formInput} placeholder="Ej: 5" />
           <p className={isDark ? S.vigenciaHintDark : S.vigenciaHintLight}>
             Ejemplo: si pones 5, el bloqueo dura 5 días desde la fecha del bloqueo y luego se libera si no se llenó. Puedes usar cualquier número (5, 15, etc.). Vacío = permanente hasta liberación manual.
           </p>

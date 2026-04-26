@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CheckCircle2, XCircle, Clock, RefreshCw } from 'lucide-react'
-import { supabase } from '@/config/supabase'
+import { getSession, onAuthStateChange, registerClinica, resendConfirmation } from '@/services/onboardingService'
 import { sanitizeString, safeParseJSON } from '@/utils/sanitizeInput'
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
@@ -56,13 +56,13 @@ export default function ConfirmarEmail() {
 
     const complete = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession()
+        const { session } = await getSession()
         if (session) {
           await completarRegistro()
           return
         }
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        const subscription = await onAuthStateChange(
           async (event, newSession) => {
             if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && newSession) {
               subscription.unsubscribe()
@@ -93,7 +93,7 @@ export default function ConfirmarEmail() {
         return
       }
       const { clinica, ciudad } = parsed
-      const { error: rpcError } = await supabase.rpc('registrar_clinica', {
+      const { error: rpcError } = await registerClinica({
         p_nombre: sanitizeString(clinica),
         p_ciudad: sanitizeString(ciudad),
       })
@@ -112,7 +112,7 @@ export default function ConfirmarEmail() {
     const { email } = safeParseJSON(pendingRaw) ?? {}
     if (!email) { navigate('/registro'); return }
     setResending(true)
-    await supabase.auth.resend({ type: 'signup', email })
+    await resendConfirmation(email)
     setResending(false)
     setResent(true)
   }

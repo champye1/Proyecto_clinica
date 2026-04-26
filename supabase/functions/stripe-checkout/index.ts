@@ -2,26 +2,33 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Stripe from 'https://esm.sh/stripe@14?target=deno'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map(s => s.trim()).filter(Boolean)
+
+function getCors(origin: string | null): Record<string, string> {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0] ?? null
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin ?? "null",
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  }
 }
 
-function json(body: unknown, status = 200) {
+function json(body: unknown, cors: Record<string, string>, status = 200) {
   return new Response(JSON.stringify(body), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...cors, 'Content-Type': 'application/json' },
     status,
   })
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  const cors = getCors(req.headers.get('origin'))
+
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
 
   try {
     const stripeKey = Deno.env.get('STRIPE_SECRET_KEY')
     if (!stripeKey) {
-      return json({ error: 'Stripe no configurado. Agrega STRIPE_SECRET_KEY en Edge Function Secrets.' }, 500)
+      return json({ error: 'Stripe no configurado. Agrega STRIPE_SECRET_KEY en Edge Function Secrets.' }, cors, 500)
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
@@ -29,7 +36,7 @@ serve(async (req) => {
     const siteUrl = Deno.env.get('SITE_URL') ?? 'http://localhost:5173'
 
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) return json({ error: 'No autorizado' }, 401)
+    if (!authHeader) return json({ error: 'No autorizado' }, cors, 401)
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -38,10 +45,10 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(
       authHeader.replace('Bearer ', '')
     )
-    if (authError || !user) return json({ error: 'Token inválido' }, 401)
+    if (authError || !user) return json({ error: 'Token inválido' }, cors, 401)
 
     const { plan_id } = await req.json()
-    if (!plan_id) return json({ error: 'plan_id requerido' }, 400)
+    if (!plan_id) return json({ error: 'plan_id requerido' }, cors, 400)
 
     // Obtener info del plan desde DB
     const { data: plan } = await supabaseAdmin
@@ -50,12 +57,12 @@ serve(async (req) => {
       .eq('id', plan_id)
       .single()
 
-    if (!plan) return json({ error: 'Plan no encontrado' }, 404)
+    if (!plan) return json({ error: 'Plan no encontrado' }, cors, 404)
 
     if (!plan.stripe_price_id) {
       return json({
         error: 'El plan no tiene un stripe_price_id configurado. Agrega el Price ID de Stripe en la tabla planes.',
-      }, 500)
+      }, cors, 500)
     }
 
     // Obtener o crear Stripe Customer
@@ -95,10 +102,10 @@ serve(async (req) => {
       },
     })
 
-    return json({ url: session.url })
+    return json({ url: session.url }, cors)
   } catch (err) {
     const e = err instanceof Error ? err : new Error('Error desconocido')
     console.error('stripe-checkout error:', e.message)
-    return json({ error: e.message }, 500)
+    return json({ error: e.message }, getCors(req.headers.get('origin')), 500)
   }
 })

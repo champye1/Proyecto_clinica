@@ -1,4 +1,5 @@
 import { Calendar, LayoutGrid } from 'lucide-react'
+import { tc } from '@/constants/theme'
 import CalendarioPabellonesGrid from '@/components/CalendarioPabellonesGrid'
 import { HORAS_SELECT } from '@/utils/horasOpciones'
 import { sanitizeString } from '@/utils/sanitizeInput'
@@ -60,6 +61,7 @@ export default function HorariosSelector({
   showCalendarioGrid, setShowCalendarioGrid,
   pabellonesList, initialFecha, theme,
 }) {
+  const t = tc(theme)
   const isDark = theme === 'dark'
 
   const handleCalendarConfirm = (payload) => {
@@ -97,8 +99,9 @@ export default function HorariosSelector({
 
   return (
     <div className={S.formMt}>
-      <label className={isDark ? S.hourLabelDark : S.hourLabelLight}>Seleccionar hora</label>
+      <label htmlFor="horario-tipo" className={isDark ? S.hourLabelDark : S.hourLabelLight}>Seleccionar hora</label>
       <select
+        id="horario-tipo"
         value={formData.dejar_fecha_a_pabellon ? 'pabellon' : 'doctor'}
         onChange={(e) => {
           const esPabellon = e.target.value === 'pabellon'
@@ -196,26 +199,26 @@ export default function HorariosSelector({
                   </div>
                   <div className={S.extraFieldsRow}>
                     <div>
-                      <label className={isDark ? S.extraInputLabelDark : S.extraInputLabelLight}>Día</label>
-                      <input type="date" value={extra.fecha_preferida || ''} onChange={(e) => setFormData(prev => ({ ...prev, horarios_extra: prev.horarios_extra.map((h, i) => i === idx ? { ...h, fecha_preferida: sanitizeString(e.target.value) } : h) }))} min={new Date().toISOString().split('T')[0]} className={S.extraDateInput} />
+                      <label htmlFor={`extra-${idx}-fecha`} className={isDark ? S.extraInputLabelDark : S.extraInputLabelLight}>Día</label>
+                      <input id={`extra-${idx}-fecha`} type="date" value={extra.fecha_preferida || ''} onChange={(e) => setFormData(prev => ({ ...prev, horarios_extra: prev.horarios_extra.map((h, i) => i === idx ? { ...h, fecha_preferida: sanitizeString(e.target.value) } : h) }))} min={new Date().toISOString().split('T')[0]} className={S.extraDateInput} />
                     </div>
                     <div>
-                      <label className={isDark ? S.extraInputLabelDark : S.extraInputLabelLight}>Pabellón</label>
-                      <select value={extra.operating_room_id || ''} onChange={(e) => setFormData(prev => ({ ...prev, horarios_extra: prev.horarios_extra.map((h, i) => i === idx ? { ...h, operating_room_id: e.target.value || '' } : h) }))} className={isDark ? S.extraPabellonSelectDark : S.extraPabellonSelectLight}>
+                      <label htmlFor={`extra-${idx}-pabellon`} className={isDark ? S.extraInputLabelDark : S.extraInputLabelLight}>Pabellón</label>
+                      <select id={`extra-${idx}-pabellon`} value={extra.operating_room_id || ''} onChange={(e) => setFormData(prev => ({ ...prev, horarios_extra: prev.horarios_extra.map((h, i) => i === idx ? { ...h, operating_room_id: e.target.value || '' } : h) }))} className={isDark ? S.extraPabellonSelectDark : S.extraPabellonSelectLight}>
                         <option value="">Seleccione</option>
                         {pabellonesList.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className={isDark ? S.extraInputLabelDark : S.extraInputLabelLight}>Hora inicio</label>
-                      <select value={extra.hora_recomendada || ''} onChange={(e) => setFormData(prev => ({ ...prev, horarios_extra: prev.horarios_extra.map((h, i) => i === idx ? { ...h, hora_recomendada: e.target.value } : h) }))} className={isDark ? S.extraHoraSelectDark : S.extraHoraSelectLight}>
+                      <label htmlFor={`extra-${idx}-inicio`} className={isDark ? S.extraInputLabelDark : S.extraInputLabelLight}>Hora inicio</label>
+                      <select id={`extra-${idx}-inicio`} value={extra.hora_recomendada || ''} onChange={(e) => setFormData(prev => ({ ...prev, horarios_extra: prev.horarios_extra.map((h, i) => i === idx ? { ...h, hora_recomendada: e.target.value } : h) }))} className={isDark ? S.extraHoraSelectDark : S.extraHoraSelectLight}>
                         <option value="">--</option>
                         {HORAS_SELECT.map(h => <option key={h} value={h}>{h}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className={isDark ? S.extraInputLabelDark : S.extraInputLabelLight}>Hora fin</label>
-                      <select value={extra.hora_fin_recomendada || ''} onChange={(e) => setFormData(prev => ({ ...prev, horarios_extra: prev.horarios_extra.map((h, i) => i === idx ? { ...h, hora_fin_recomendada: e.target.value } : h) }))} className={isDark ? S.extraHoraSelectDark : S.extraHoraSelectLight}>
+                      <label htmlFor={`extra-${idx}-fin`} className={isDark ? S.extraInputLabelDark : S.extraInputLabelLight}>Hora fin</label>
+                      <select id={`extra-${idx}-fin`} value={extra.hora_fin_recomendada || ''} onChange={(e) => setFormData(prev => ({ ...prev, horarios_extra: prev.horarios_extra.map((h, i) => i === idx ? { ...h, hora_fin_recomendada: e.target.value } : h) }))} className={isDark ? S.extraHoraSelectDark : S.extraHoraSelectLight}>
                         <option value="">--</option>
                         {HORAS_SELECT.filter(h => !extra.hora_recomendada || h > extra.hora_recomendada).map(h => <option key={h} value={h}>{h}</option>)}
                       </select>

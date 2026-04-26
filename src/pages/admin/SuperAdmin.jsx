@@ -5,7 +5,7 @@ import {
   Clock, ChevronDown, ChevronUp, RefreshCw, Calendar, Eye,
   Stethoscope, XCircle, TrendingUp, Zap, Ban, RotateCcw,
 } from 'lucide-react'
-import { supabase } from '@/config/supabase'
+import { getAdminStats, getAllClinics, fetchPlans, getClinicHealth, extendTrial, activatePlan, suspendClinic, reactivateClinic } from '@/services/adminService'
 import { useNavigate } from 'react-router-dom'
 import { format, formatDistanceToNow } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -65,13 +65,14 @@ export default function SuperAdmin() {
   const navigate = useNavigate()
   const [expandedId, setExpandedId] = useState(null)
   const [extendDays, setExtendDays] = useState({})
+  const [selectedPlan, setSelectedPlan] = useState({})
   const [healthData, setHealthData] = useState({})
   const [loadingHealth, setLoadingHealth] = useState({})
 
   const loadHealth = async (clinicaId) => {
     if (healthData[clinicaId] || loadingHealth[clinicaId]) return
     setLoadingHealth(p => ({ ...p, [clinicaId]: true }))
-    const { data } = await supabase.rpc('get_clinica_health', { p_clinica_id: clinicaId })
+    const { data } = await getClinicHealth(clinicaId)
     setHealthData(p => ({ ...p, [clinicaId]: data }))
     setLoadingHealth(p => ({ ...p, [clinicaId]: false }))
   }
@@ -79,7 +80,7 @@ export default function SuperAdmin() {
   const { data: stats } = useQuery({
     queryKey: ['admin-stats'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_admin_stats')
+      const { data, error } = await getAdminStats()
       if (error) throw error
       return Array.isArray(data) ? data[0] : data
     },
@@ -88,7 +89,7 @@ export default function SuperAdmin() {
   const { data: clinicas = [], isLoading, refetch } = useQuery({
     queryKey: ['admin-clinicas'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_all_clinicas')
+      const { data, error } = await getAllClinics()
       if (error) throw error
       return data ?? []
     },
@@ -97,30 +98,28 @@ export default function SuperAdmin() {
   const { data: planes = [] } = useQuery({
     queryKey: ['planes-list'],
     queryFn: async () => {
-      const { data } = await supabase.from('planes').select('id, nombre, precio_mensual_usd').eq('activo', true).order('precio_mensual_usd')
+      const { data } = await fetchPlans()
       return data ?? []
     },
   })
 
   const mutExtend = useMutation({
-    mutationFn: ({ clinicaId, dias }) =>
-      supabase.rpc('extender_trial', { p_clinica_id: clinicaId, p_dias: dias }),
+    mutationFn: ({ clinicaId, dias }) => extendTrial(clinicaId, dias),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-clinicas', 'admin-stats'] }),
   })
 
   const mutActivate = useMutation({
-    mutationFn: ({ clinicaId, planId }) =>
-      supabase.rpc('admin_activar_plan', { p_clinica_id: clinicaId, p_plan_id: planId }),
+    mutationFn: ({ clinicaId, planId }) => activatePlan(clinicaId, planId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-clinicas', 'admin-stats'] }),
   })
 
   const mutSuspender = useMutation({
-    mutationFn: (clinicaId) => supabase.rpc('admin_suspender_clinica', { p_clinica_id: clinicaId }),
+    mutationFn: (clinicaId) => suspendClinic(clinicaId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-clinicas', 'admin-stats'] }),
   })
 
   const mutReactivar = useMutation({
-    mutationFn: (clinicaId) => supabase.rpc('admin_reactivar_clinica', { p_clinica_id: clinicaId }),
+    mutationFn: (clinicaId) => reactivateClinic(clinicaId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-clinicas', 'admin-stats'] }),
   })
 
@@ -311,8 +310,8 @@ export default function SuperAdmin() {
                       {planes.length > 0 && (
                         <div className="flex items-center gap-2">
                           <select
-                            defaultValue={planes[0]?.id}
-                            id={`plan-select-${c.id}`}
+                            value={selectedPlan[c.id] ?? planes[0]?.id ?? ''}
+                            onChange={(e) => setSelectedPlan(p => ({ ...p, [c.id]: e.target.value }))}
                             className="px-3 py-2 bg-white/5 border border-white/10 text-slate-300 rounded-xl text-xs focus:border-emerald-500/50 focus:outline-none transition-colors"
                           >
                             {planes.map(p => (
@@ -320,10 +319,7 @@ export default function SuperAdmin() {
                             ))}
                           </select>
                           <button
-                            onClick={() => {
-                              const sel = document.getElementById(`plan-select-${c.id}`)
-                              mutActivate.mutate({ clinicaId: c.id, planId: sel.value })
-                            }}
+                            onClick={() => mutActivate.mutate({ clinicaId: c.id, planId: selectedPlan[c.id] ?? planes[0]?.id })}
                             disabled={mutActivate.isPending}
                             className="flex items-center gap-2 px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-300 text-xs font-black uppercase tracking-wider rounded-xl transition-colors disabled:opacity-50"
                           >

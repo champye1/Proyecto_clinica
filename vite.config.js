@@ -8,8 +8,14 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
       registerType: 'autoUpdate',
       includeAssets: ['icons/icon.svg', 'icons/icon-192.svg'],
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+      },
       manifest: {
         name: 'SurgicalHUB',
         short_name: 'SurgicalHUB',
@@ -45,25 +51,6 @@ export default defineConfig({
             name: 'Calendario',
             url: '/pabellon/calendario',
             description: 'Ver calendario de pabellones',
-          },
-        ],
-      },
-      workbox: {
-        // Cachea los assets estáticos (JS, CSS, fuentes)
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        // No cachea las llamadas a Supabase (siempre fresh)
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/rest\//, /^\/auth\//, /^\/functions\//],
-        runtimeCaching: [
-          {
-            // Cache de Google Fonts si se agregan en el futuro
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-cache',
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
           },
         ],
       },

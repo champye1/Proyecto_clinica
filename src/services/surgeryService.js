@@ -1,5 +1,6 @@
 import { supabase } from '@/config/supabase'
 import { logger } from '@/utils/logger'
+import { SurgeryListSchema } from '@/schemas/surgery.schema'
 
 export async function scheduleSurgery({ surgeryRequestId, operatingRoomId, fecha, horaInicio, horaFin, observaciones }) {
   const { data, error } = await supabase.rpc('programar_cirugia_completa', {
@@ -53,7 +54,10 @@ export async function fetchSurgeriesByDateRange(fechaInicio, fechaFin) {
     .gte('fecha', fechaInicio)
     .lte('fecha', fechaFin)
     .order('fecha', { ascending: false })
-  return { data: data ?? [], error }
+  if (error) { logger.errorWithContext('surgeryService.fetchSurgeriesByDateRange', error); return { data: [], error } }
+  const validation = SurgeryListSchema.safeParse(data)
+  if (!validation.success) logger.errorWithContext('[schema] surgeryService.fetchSurgeriesByDateRange', validation.error)
+  return { data: data ?? [], error: null }
 }
 
 export async function fetchSurgeriesByDay(fecha) {
@@ -63,7 +67,21 @@ export async function fetchSurgeriesByDay(fecha) {
     .eq('fecha', fecha)
     .is('deleted_at', null)
     .order('hora_inicio', { ascending: true })
-  return { data: data ?? [], error }
+  if (error) { logger.errorWithContext('surgeryService.fetchSurgeriesByDay', error); return { data: [], error } }
+  const validation = SurgeryListSchema.safeParse(data)
+  if (!validation.success) logger.errorWithContext('[schema] surgeryService.fetchSurgeriesByDay', validation.error)
+  return { data: data ?? [], error: null }
+}
+
+export async function fetchSurgeryByRequestId(requestId) {
+  const { data, error } = await supabase
+    .from('surgeries')
+    .select('id, surgery_request_id, fecha, hora_inicio, hora_fin, operating_room_id')
+    .eq('surgery_request_id', requestId)
+    .is('deleted_at', null)
+    .maybeSingle()
+  if (error) { logger.errorWithContext('surgeryService.fetchSurgeryByRequestId', error); return { data: null, error } }
+  return { data, error: null }
 }
 
 export async function fetchScheduleBlocksByDateRange(fechaInicio, fechaFin) {
@@ -74,6 +92,26 @@ export async function fetchScheduleBlocksByDateRange(fechaInicio, fechaFin) {
     .lte('fecha', fechaFin)
     .is('deleted_at', null)
   return { data: data ?? [], error }
+}
+
+export async function fetchSurgeriesForDoctor(doctorId, { fecha, limit } = {}) {
+  let query = supabase
+    .from('surgeries')
+    .select('*, patients:patient_id(nombre, apellido, rut), operating_rooms:operating_room_id(nombre), surgery_requests:surgery_request_id(codigo_operacion)')
+    .eq('doctor_id', doctorId)
+    .is('deleted_at', null)
+    .order('fecha', { ascending: true })
+    .order('hora_inicio', { ascending: true })
+
+  if (fecha) query = query.eq('fecha', fecha)
+  else query = query.gte('fecha', new Date().toISOString().split('T')[0])
+  if (limit) query = query.limit(limit)
+
+  const { data, error } = await query
+  if (error) { logger.errorWithContext('surgeryService.fetchSurgeriesForDoctor', error); return { data: [], error } }
+  const validation = SurgeryListSchema.safeParse(data)
+  if (!validation.success) logger.errorWithContext('[schema] surgeryService.fetchSurgeriesForDoctor', validation.error)
+  return { data: data ?? [], error: null }
 }
 
 export async function notifyRescheduleToPabellon(surgeryRequestId) {

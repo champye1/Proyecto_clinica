@@ -4,7 +4,7 @@ import {
   Users, Search, ShieldCheck, Stethoscope, Building2,
   UserX, RefreshCw, KeyRound, LogOut, CheckCircle2, XCircle, UserCheck, Download,
 } from 'lucide-react'
-import { supabase } from '@/config/supabase'
+import { getAllUsers, deactivateUser, reactivateUser, forceLogoutUser, sendPasswordReset } from '@/services/adminService'
 import { sanitizeString } from '@/utils/sanitizeInput'
 import { useDebounce } from '@/hooks/useDebounce'
 import { exportToCsv } from '@/utils/exportCsv'
@@ -42,7 +42,7 @@ export default function GestionUsuarios() {
   const { data: usuarios = [], isLoading, refetch } = useQuery({
     queryKey: ['admin-usuarios'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_all_usuarios')
+      const { data, error } = await getAllUsers()
       if (error) throw error
       return data ?? []
     },
@@ -50,7 +50,7 @@ export default function GestionUsuarios() {
 
   const desactivar = useMutation({
     mutationFn: async (userId) => {
-      const { error } = await supabase.rpc('admin_desactivar_usuario', { p_user_id: userId })
+      const { error } = await deactivateUser(userId)
       if (error) throw error
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-usuarios'] }); showToast('Usuario desactivado') },
@@ -59,9 +59,7 @@ export default function GestionUsuarios() {
 
   const resetPw = useMutation({
     mutationFn: async (email) => {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/restablecer-contrasena`,
-      })
+      const { error } = await sendPasswordReset(email, `${window.location.origin}/restablecer-contrasena`)
       if (error) throw error
     },
     onSuccess: () => showToast('Email de recuperación enviado ✓'),
@@ -70,7 +68,7 @@ export default function GestionUsuarios() {
 
   const forceLogout = useMutation({
     mutationFn: async (userId) => {
-      const { error } = await supabase.rpc('admin_force_logout', { p_user_id: userId })
+      const { error } = await forceLogoutUser(userId)
       if (error) throw error
     },
     onSuccess: () => showToast('Sesión cerrada forzadamente'),
@@ -79,7 +77,7 @@ export default function GestionUsuarios() {
 
   const reactivar = useMutation({
     mutationFn: async (userId) => {
-      const { error } = await supabase.rpc('admin_reactivar_usuario', { p_user_id: userId })
+      const { error } = await reactivateUser(userId)
       if (error) throw error
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-usuarios'] }); showToast('Usuario reactivado') },

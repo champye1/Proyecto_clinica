@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Building2, Mail, Lock, MapPin, Eye, EyeOff, ArrowRight, CheckCircle2, MailCheck } from 'lucide-react'
-import { supabase } from '@/config/supabase'
+import { signUpClinica, registerClinica, resendConfirmation } from '@/services/onboardingService'
 import { sanitizeEmail, sanitizeString } from '@/utils/sanitizeInput'
 
 // ─── Datos ────────────────────────────────────────────────────────────────────
@@ -100,13 +100,11 @@ export default function Registro() {
 
     setLoading(true)
     try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: sanitizeEmail(form.email),
-        password: form.password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/onboarding/confirmar`,
-        },
-      })
+      const { data: authData, error: authError } = await signUpClinica(
+        sanitizeEmail(form.email),
+        form.password,
+        { redirectTo: `${window.location.origin}/onboarding/confirmar` }
+      )
 
       if (authError) throw authError
       if (!authData.user) throw new Error('No se pudo crear el usuario.')
@@ -128,7 +126,7 @@ export default function Registro() {
       }
 
       // Auto-confirm activo (entorno de desarrollo): crear clínica directamente
-      const { error: rpcError } = await supabase.rpc('registrar_clinica', {
+      const { error: rpcError } = await registerClinica({
         p_nombre: sanitizeString(form.clinica),
         p_ciudad: sanitizeString(form.ciudad),
       })
@@ -166,7 +164,7 @@ export default function Registro() {
           </p>
           <button
             onClick={async () => {
-              await supabase.auth.resend({ type: 'signup', email: form.email })
+              await resendConfirmation(form.email)
               setError(null)
             }}
             className={STYLES.resendBtn}

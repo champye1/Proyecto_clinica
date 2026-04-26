@@ -1,15 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map(s => s.trim()).filter(Boolean)
+
+function getCors(origin: string | null): Record<string, string> {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0] ?? null
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin ?? "null",
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  }
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
+  const cors = getCors(req.headers.get('origin'))
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: cors })
   }
 
   try {
@@ -28,7 +34,7 @@ serve(async (req) => {
           error: 'Variables de entorno no configuradas. Ve a Supabase Dashboard → Edge Functions → Settings → Secrets y agrega: SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY'
         }),
         {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...cors, 'Content-Type': 'application/json' },
           status: 200,
         },
       )
@@ -55,7 +61,7 @@ serve(async (req) => {
           error: 'Debes proporcionar userId o email del usuario a eliminar'
         }),
         {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...cors, 'Content-Type': 'application/json' },
           status: 200,
         },
       )
@@ -74,7 +80,7 @@ serve(async (req) => {
             error: `Error al buscar usuario: ${searchError.message}`
           }),
           {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { ...cors, 'Content-Type': 'application/json' },
             status: 200,
           },
         )
@@ -89,7 +95,7 @@ serve(async (req) => {
             error: `No se encontró usuario con el email: ${email}`
           }),
           {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { ...cors, 'Content-Type': 'application/json' },
             status: 200,
           },
         )
@@ -112,7 +118,7 @@ serve(async (req) => {
           error: `Error al verificar usuario: ${userError.message}`
         }),
         {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...cors, 'Content-Type': 'application/json' },
           status: 200,
         },
       )
@@ -172,7 +178,7 @@ serve(async (req) => {
               message: 'Si deseas eliminar el usuario de todas formas, envía force: true en el cuerpo de la petición. ADVERTENCIA: Esto puede causar problemas de integridad de datos.'
             }),
             {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              headers: { ...cors, 'Content-Type': 'application/json' },
               status: 200,
             },
           )
@@ -190,7 +196,7 @@ serve(async (req) => {
           error: `Error al eliminar usuario: ${deleteError.message}`
         }),
         {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...cors, 'Content-Type': 'application/json' },
           status: 200,
         },
       )
@@ -203,7 +209,7 @@ serve(async (req) => {
         userId: targetUserId
       }),
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...cors, 'Content-Type': 'application/json' },
         status: 200,
       },
     )
@@ -215,7 +221,7 @@ serve(async (req) => {
         error: error.message || 'Error desconocido'
       }),
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...cors, 'Content-Type': 'application/json' },
         status: 200,
       },
     )

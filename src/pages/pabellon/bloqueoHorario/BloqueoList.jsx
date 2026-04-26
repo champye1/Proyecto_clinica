@@ -1,4 +1,5 @@
 import { Edit, X } from 'lucide-react'
+import { tc } from '@/constants/theme'
 import Pagination from '@/components/common/Pagination'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 
@@ -30,6 +31,7 @@ const S = {
 }
 
 export default function BloqueoList({ bloqueos, bloqueosPaginados, currentPage, totalPages, setCurrentPage, iniciarEdicion, handleEliminar, isDeleting, isCreating, isUpdating, itemsPerPage, theme }) {
+  const t = tc(theme)
   const isDark = theme === 'dark'
 
   return (

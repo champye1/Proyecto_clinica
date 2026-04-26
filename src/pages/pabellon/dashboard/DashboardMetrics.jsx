@@ -4,6 +4,7 @@ import Card from '@/components/common/Card'
 import Tooltip from '@/components/common/Tooltip'
 import { MetricSkeleton } from '@/components/common/Skeleton'
 import { useTheme } from '@/contexts/ThemeContext'
+import { tc } from '@/constants/theme'
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
 const STYLES = {
@@ -40,6 +41,7 @@ export default function DashboardMetrics({
   const { theme } = useTheme()
   const navigate = useNavigate()
 
+  const t = tc(theme)
   const isDark = theme === 'dark'
 
   const primaryStats = [

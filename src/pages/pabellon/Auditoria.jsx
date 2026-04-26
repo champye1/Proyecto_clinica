@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/config/supabase'
 import { Search, Filter, Download, FileSpreadsheet, Calendar, User, Database, Clock } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -11,6 +10,7 @@ import { exportToCSV, exportToExcel } from '@/utils/exportData'
 import Pagination from '@/components/common/Pagination'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import { useTheme } from '@/contexts/ThemeContext'
+import { tc } from '@/constants/theme'
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
 const STYLES = {
@@ -199,6 +199,7 @@ export default function Auditoria() {
     return colores[accion] || 'bg-gray-100 text-gray-800'
   }
 
+  const t = tc(theme)
   const isDark = theme === 'dark'
 
   return (

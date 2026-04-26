@@ -1,4 +1,5 @@
 import { Edit, Trash2, CheckCircle2, XCircle, Palmtree, UserCheck } from 'lucide-react'
+import { tc } from '@/constants/theme'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import Pagination from '@/components/common/Pagination'
 import { formatRut } from '@/utils/rutFormatter'
@@ -48,6 +49,7 @@ export default function MedicosTable({
   iniciarEdicion, handleEliminar,
   getEstadoBadge, theme,
 }) {
+  const t = tc(theme)
   const isDark = theme === 'dark'
 
   return (

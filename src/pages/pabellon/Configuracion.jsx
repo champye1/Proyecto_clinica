@@ -3,10 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Building2, LayoutGrid, Plus, Pencil, Trash2, Check, X,
   CreditCard, Calendar, Users, AlertCircle, CheckCircle2,
+  Mail, Phone, Save, Loader2,
 } from 'lucide-react'
 import { useClinicaInfo, useTrialStatus } from '@/hooks/useClinicaInfo'
 import { fetchAllRooms, createRoom, updateRoom, deleteRoom } from '@/services/operatingRoomService'
+import { updateClinicaInfo } from '@/services/clinicaService'
 import { useTheme } from '@/contexts/ThemeContext'
+import { tc } from '@/constants/theme'
 import Button from '@/components/common/Button'
 import Modal from '@/components/common/Modal'
 
@@ -74,6 +77,37 @@ export default function Configuracion() {
     },
   })
 
+  // ── Edición info de contacto ──────────────────────────────
+  const [editingContact, setEditingContact] = useState(false)
+  const [contactForm, setContactForm]       = useState({ nombre: '', ciudad: '', telefono: '', emailContacto: '' })
+  const [contactMsg, setContactMsg]         = useState(null)
+
+  const mutationContact = useMutation({
+    mutationFn: () => updateClinicaInfo(contactForm),
+    onSuccess: ({ error }) => {
+      if (error) {
+        setContactMsg({ ok: false, text: 'Error al guardar. Intenta de nuevo.' })
+      } else {
+        setContactMsg({ ok: true, text: 'Información actualizada.' })
+        queryClient.invalidateQueries({ queryKey: ['clinica-info'] })
+        setEditingContact(false)
+      }
+      setTimeout(() => setContactMsg(null), 4000)
+    },
+  })
+
+  const openContactEdit = () => {
+    setContactForm({
+      nombre:        clinicaInfo?.nombre         ?? '',
+      ciudad:        clinicaInfo?.ciudad         ?? '',
+      telefono:      clinicaInfo?.telefono       ?? '',
+      emailContacto: clinicaInfo?.email_contacto ?? '',
+    })
+    setContactMsg(null)
+    setEditingContact(true)
+  }
+
+  // ── Salas ─────────────────────────────────────────────────
   const [showModal, setShowModal] = useState(false)
   const [editingRoom, setEditingRoom] = useState(null)
   const [roomName, setRoomName] = useState('')
@@ -127,15 +161,13 @@ export default function Configuracion() {
     editingRoom ? mutationUpdate.mutate() : mutationCreate.mutate()
   }
 
+  const t = tc(theme)
   const isDark = theme === 'dark'
-  const isMedical = theme === 'medical'
 
-  const card = isDark ? 'bg-slate-800 border-slate-700' : isMedical ? 'bg-white border-blue-100' : 'bg-white border-slate-200'
-  const label = isDark ? 'text-slate-400' : 'text-slate-500'
-  const title = isDark ? 'text-white' : 'text-slate-900'
-  const input = isDark
-    ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-400 focus:ring-blue-500'
-    : 'bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:ring-blue-500'
+  const card  = `${t.cardBg} ${t.border}`
+  const label = t.textMuted
+  const title = t.textPrimary
+  const input = `${t.inputBg} ${t.borderInput} ${t.textPrimary} placeholder-slate-400 focus:ring-blue-500`
 
   // ── Plan badge ────────────────────────────────────────────
   const estadoBadge = () => {
@@ -158,49 +190,149 @@ export default function Configuracion() {
 
       {/* ── Información de la clínica ── */}
       <section className={`${STYLES.section} ${card}`}>
-        <div className={STYLES.sectionHeader}>
-          <div className={`${STYLES.sectionIcon} bg-blue-100`}>
-            <Building2 className={STYLES.iconMd} />
+        <div className={`${STYLES.sectionTopRow}`}>
+          <div className={STYLES.sectionHeader} style={{ marginBottom: 0 }}>
+            <div className={`${STYLES.sectionIcon} bg-blue-100`}>
+              <Building2 className={STYLES.iconMd} />
+            </div>
+            <h2 className={`${STYLES.sectionTitle} ${title}`}>Tu clínica</h2>
           </div>
-          <h2 className={`${STYLES.sectionTitle} ${title}`}>Tu clínica</h2>
+          {!editingContact && clinicaInfo && (
+            <Button variant="ghost" size="sm" onClick={openContactEdit} icon={<Pencil className={STYLES.iconSm} />}>
+              Editar
+            </Button>
+          )}
         </div>
 
         {loadingClinica ? (
-          <div className={STYLES.spaceY3}>
+          <div className={`${STYLES.spaceY3} mt-5`}>
             {[1,2,3].map(i => <div key={i} className={STYLES.skeletonLine} />)}
           </div>
         ) : clinicaInfo ? (
-          <div className={STYLES.infoGrid}>
-            <div>
-              <p className={`${STYLES.infoLabel} ${label}`}>Nombre</p>
-              <p className={`font-semibold ${title}`}>{clinicaInfo.nombre}</p>
-            </div>
-            <div>
-              <p className={`${STYLES.infoLabel} ${label}`}>Ciudad</p>
-              <p className={`font-semibold ${title}`}>{clinicaInfo.ciudad}</p>
-            </div>
-            <div>
-              <p className={`${STYLES.infoLabel} ${label}`}>Plan</p>
-              <div className={STYLES.planRow}>
-                <p className={`font-semibold ${title}`}>{clinicaInfo.planes?.nombre ?? '—'}</p>
-                {estadoBadge()}
-              </div>
-            </div>
-            {clinicaInfo.planes && (
+          <>
+            {/* Vista de solo lectura: plan */}
+            <div className={`${STYLES.infoGrid} mt-5`}>
               <div>
-                <p className={`${STYLES.infoLabel} ${label}`}>Límites</p>
-                <p className={`text-sm ${title}`}>
-                  <Users className={STYLES.iconXsMr} />
-                  {clinicaInfo.planes.max_doctores >= 999 ? 'Ilimitados' : `${clinicaInfo.planes.max_doctores} médicos`}
-                  {' · '}
-                  <LayoutGrid className={STYLES.iconXsMr} />
-                  {clinicaInfo.planes.max_salas >= 99 ? 'Ilimitadas' : `${clinicaInfo.planes.max_salas} salas`}
-                </p>
+                <p className={`${STYLES.infoLabel} ${label}`}>Plan</p>
+                <div className={STYLES.planRow}>
+                  <p className={`font-semibold ${title}`}>{clinicaInfo.planes?.nombre ?? '—'}</p>
+                  {estadoBadge()}
+                </div>
+              </div>
+              {clinicaInfo.planes && (
+                <div>
+                  <p className={`${STYLES.infoLabel} ${label}`}>Límites</p>
+                  <p className={`text-sm ${title}`}>
+                    <Users className={STYLES.iconXsMr} />
+                    {clinicaInfo.planes.max_doctores >= 999 ? 'Ilimitados' : `${clinicaInfo.planes.max_doctores} médicos`}
+                    {' · '}
+                    <LayoutGrid className={STYLES.iconXsMr} />
+                    {clinicaInfo.planes.max_salas >= 99 ? 'Ilimitadas' : `${clinicaInfo.planes.max_salas} salas`}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Separador */}
+            <div className={`my-5 border-t ${t.border}`} />
+
+            {/* Información de contacto — editable */}
+            {editingContact ? (
+              <div className="space-y-4">
+                <p className={`text-xs font-black uppercase tracking-wider ${label}`}>Información de contacto</p>
+                <div className={STYLES.infoGrid}>
+                  <div className="space-y-1">
+                    <label className={`text-xs font-bold ${label}`}>Nombre de la clínica</label>
+                    <input
+                      type="text"
+                      value={contactForm.nombre}
+                      onChange={e => setContactForm(f => ({ ...f, nombre: e.target.value }))}
+                      className={`w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 ${input}`}
+                      placeholder="Nombre de la clínica"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className={`text-xs font-bold ${label}`}>Ciudad</label>
+                    <input
+                      type="text"
+                      value={contactForm.ciudad}
+                      onChange={e => setContactForm(f => ({ ...f, ciudad: e.target.value }))}
+                      className={`w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 ${input}`}
+                      placeholder="Santiago"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className={`text-xs font-bold ${label}`}>
+                      <Mail className="inline w-3 h-3 mr-1" />Correo de contacto
+                    </label>
+                    <input
+                      type="email"
+                      value={contactForm.emailContacto}
+                      onChange={e => setContactForm(f => ({ ...f, emailContacto: e.target.value }))}
+                      className={`w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 ${input}`}
+                      placeholder="contacto@clinica.cl"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className={`text-xs font-bold ${label}`}>
+                      <Phone className="inline w-3 h-3 mr-1" />Teléfono
+                    </label>
+                    <input
+                      type="tel"
+                      value={contactForm.telefono}
+                      onChange={e => setContactForm(f => ({ ...f, telefono: e.target.value }))}
+                      className={`w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 ${input}`}
+                      placeholder="+56 2 2345 6789"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => mutationContact.mutate()}
+                    disabled={mutationContact.isPending}
+                    icon={mutationContact.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className={STYLES.iconSm} />}
+                  >
+                    {mutationContact.isPending ? 'Guardando…' : 'Guardar'}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setEditingContact(false)}>
+                    Cancelar
+                  </Button>
+                  {contactMsg && (
+                    <p className={`text-sm font-semibold ${contactMsg.ok ? 'text-green-500' : 'text-red-500'}`}>
+                      {contactMsg.text}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className={STYLES.infoGrid}>
+                <div>
+                  <p className={`${STYLES.infoLabel} ${label}`}>Nombre</p>
+                  <p className={`font-semibold ${title}`}>{clinicaInfo.nombre || '—'}</p>
+                </div>
+                <div>
+                  <p className={`${STYLES.infoLabel} ${label}`}>Ciudad</p>
+                  <p className={`font-semibold ${title}`}>{clinicaInfo.ciudad || '—'}</p>
+                </div>
+                <div>
+                  <p className={`${STYLES.infoLabel} ${label}`}>
+                    <Mail className="inline w-3 h-3 mr-1" />Correo de contacto
+                  </p>
+                  <p className={`font-semibold ${title}`}>{clinicaInfo.email_contacto || <span className={label}>Sin correo configurado</span>}</p>
+                </div>
+                <div>
+                  <p className={`${STYLES.infoLabel} ${label}`}>
+                    <Phone className="inline w-3 h-3 mr-1" />Teléfono
+                  </p>
+                  <p className={`font-semibold ${title}`}>{clinicaInfo.telefono || <span className={label}>Sin teléfono configurado</span>}</p>
+                </div>
               </div>
             )}
-          </div>
+          </>
         ) : (
-          <p className={`text-sm ${label}`}>No se pudo cargar la información.</p>
+          <p className={`text-sm mt-5 ${label}`}>No se pudo cargar la información.</p>
         )}
       </section>
 

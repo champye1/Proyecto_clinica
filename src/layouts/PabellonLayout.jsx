@@ -9,7 +9,7 @@ import {
   FileText, Calendar, Clock, Users, Package, LogOut, Home,
   PanelLeftClose, PanelLeftOpen, Settings, Menu, X, FileSearch,
   Bell, Stethoscope, Sun, Moon, Activity, Mail, AlertTriangle,
-  LayoutGrid, UserCog, BarChart2,
+  LayoutGrid, UserCog, BarChart2, Plug2,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 const Dashboard     = lazy(() => import('@/pages/pabellon/dashboard'))
@@ -23,10 +23,12 @@ const Auditoria     = lazy(() => import('@/pages/pabellon/Auditoria'))
 const Correos       = lazy(() => import('@/pages/pabellon/Correos'))
 const Configuracion = lazy(() => import('@/pages/pabellon/Configuracion'))
 const Facturacion   = lazy(() => import('@/pages/pabellon/Facturacion'))
-const Reportes      = lazy(() => import('@/pages/pabellon/Reportes'))
+const Reportes        = lazy(() => import('@/pages/pabellon/Reportes'))
+const Integraciones   = lazy(() => import('@/pages/pabellon/integraciones'))
 import { useRealtimeNotifications } from '@/hooks/useRealtimeNotifications'
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
 import { useNotificationsList } from '@/hooks/useNotificationsList'
+import { fetchMessageCounts } from '@/services/externalMessageService'
 import { useTheme } from '@/contexts/ThemeContext'
 import Modal from '@/components/common/Modal'
 
@@ -42,6 +44,7 @@ const menuItems = [
   { path: '/pabellon/correos', icon: Mail, label: 'Correos', badge: true },
   { path: '/pabellon/reportes', icon: BarChart2, label: 'Reportes' },
   { path: '/pabellon/auditoria', icon: FileSearch, label: 'Auditoría' },
+  { path: '/pabellon/integraciones', icon: Plug2, label: 'Integraciones' },
   { path: '/pabellon/configuracion', icon: LayoutGrid, label: 'Configuración' },
 ]
 
@@ -190,21 +193,13 @@ export default function PabellonLayout() {
   const { count: unreadCount } = useUnreadNotifications(userId)
   const { notifications, markAsRead, markAllAsRead } = useNotificationsList(userId, { enabled: showNotificationsDropdown })
 
-  const { data: correosNoLeidos = 0 } = useQuery({
+  const { data: correosData } = useQuery({
     queryKey: ['external-messages-unread'],
-    queryFn: async () => {
-      const { count, error } = await supabase
-        .from('external_messages')
-        .select('*', { count: 'exact', head: true })
-        .eq('leido', false)
-        .eq('archivado', false)
-        .is('deleted_at', null)
-      if (error) return 0
-      return count || 0
-    },
+    queryFn: fetchMessageCounts,
     enabled: !!userId,
     refetchInterval: 30000,
   })
+  const correosNoLeidos = correosData?.data?.no_leidos ?? 0
 
   const handleLogout = async () => {
     const { clearAllAppData } = await import('../utils/storageCleaner')
@@ -509,6 +504,7 @@ export default function PabellonLayout() {
               <Route path="/correos" element={<Correos />} />
               <Route path="/reportes" element={<Reportes />} />
               <Route path="/auditoria" element={<Auditoria />} />
+              <Route path="/integraciones" element={<Integraciones />} />
               <Route path="/configuracion" element={<Configuracion />} />
               <Route path="/facturacion" element={<Facturacion />} />
               <Route path="*" element={<Navigate to="/pabellon" />} />

@@ -7,7 +7,7 @@ import {
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
-import { supabase } from '@/config/supabase'
+import { getFinancialStats } from '@/services/adminService'
 import { exportToCsv } from '@/utils/exportCsv'
 
 // ─── KPI Card ────────────────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ export default function Financiero() {
   const { data: stats, isLoading, refetch } = useQuery({
     queryKey: ['financial-stats'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_financial_stats')
+      const { data, error } = await getFinancialStats()
       if (error) throw error
       return data
     },

@@ -5,6 +5,7 @@ import { es } from 'date-fns/locale'
 import Card from '@/components/common/Card'
 import OcupacionChart from '@/components/charts/OcupacionChart'
 import { useTheme } from '@/contexts/ThemeContext'
+import { tc } from '@/constants/theme'
 import { sanitizeString } from '@/utils/sanitizeInput'
 
 // ─── Datos ────────────────────────────────────────────────────────────────────
@@ -40,6 +41,7 @@ const STYLES = {
  */
 export default function DashboardChart({ cirugiasSemana = [], pabellonesActivos = [], ocupacion }) {
   const { theme } = useTheme()
+  const t = tc(theme)
   const isDark = theme === 'dark'
 
   const [filtroTipo, setFiltroTipo] = useState('porcentaje')

@@ -17,11 +17,13 @@ export async function getMyClinicaId() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('users')
     .select('clinica_id')
     .eq('id', user.id)
     .single()
+
+  if (error) return null  // no cachear en fallo de red, se reintentará en la próxima llamada
 
   _clinicaId = data?.clinica_id ?? null
   return _clinicaId

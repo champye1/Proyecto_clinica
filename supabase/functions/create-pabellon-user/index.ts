@@ -28,11 +28,16 @@ function stripForStorage(s: string): string {
   return s.replace(/[\x00-\x1F\x7F]/g, '').replace(/<[^>]+>/g, '').trim()
 }
 
-const getCorsHeaders = (origin: string | null) => ({
-  'Access-Control-Allow-Origin': origin || '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-})
+const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map(s => s.trim()).filter(Boolean)
+
+const getCorsHeaders = (origin: string | null) => {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0] ?? null
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin ?? "null",
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  }
+}
 
 serve(async (req) => {
   const origin = req.headers.get('origin')

@@ -11,7 +11,7 @@ export function useClinicaInfo() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('clinicas')
-        .select('id, nombre, ciudad, trial_hasta, estado, plan_id, planes(id, nombre, precio_mensual_usd, max_doctores, max_salas)')
+        .select('id, nombre, ciudad, telefono, email_contacto, trial_hasta, estado, plan_id, planes(id, nombre, precio_mensual_usd, max_doctores, max_salas)')
         .single()
 
       if (error) throw error

@@ -1,12 +1,14 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/config/supabase'
-import { getCurrentUser } from '@/services/authService'
 import { useNotifications } from '@/hooks/useNotifications'
 import { sanitizeString } from '@/utils/sanitizeInput'
 import { HORAS_SELECT } from '@/utils/horasOpciones'
 import ConfirmModal from '@/components/common/ConfirmModal'
 import { useTheme } from '@/contexts/ThemeContext'
+import { tc } from '@/constants/theme'
+import { listDoctors } from '@/services/doctorService'
+import { fetchRooms } from '@/services/operatingRoomService'
+import { fetchBlocks, createBlock, updateBlock, deleteBlock, fetchSurgeriesForSlot } from '@/services/scheduleBlockService'
 import BloqueoForm from './bloqueoHorario/BloqueoForm'
 import BloqueoList from './bloqueoHorario/BloqueoList'
 
@@ -33,12 +35,13 @@ export default function BloqueoHorario() {
   const queryClient = useQueryClient()
   const { showSuccess, showError } = useNotifications()
   const { theme } = useTheme()
+  const t = tc(theme)
   const isDark = theme === 'dark'
 
   const { data: doctores = [] } = useQuery({
     queryKey: ['doctores'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('doctors').select('id, nombre, apellido').eq('estado', 'activo').is('deleted_at', null)
+      const { data, error } = await listDoctors()
       if (error) throw error
       return data
     },
@@ -47,7 +50,7 @@ export default function BloqueoHorario() {
   const { data: pabellones = [] } = useQuery({
     queryKey: ['pabellones'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('operating_rooms').select('id, nombre').eq('activo', true).is('deleted_at', null)
+      const { data, error } = await fetchRooms()
       if (error) throw error
       return data
     },
@@ -56,12 +59,7 @@ export default function BloqueoHorario() {
   const { data: bloqueos = [] } = useQuery({
     queryKey: ['bloqueos'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('schedule_blocks')
-        .select('*, doctors:doctor_id(nombre, apellido), operating_rooms:operating_room_id(nombre)')
-        .is('deleted_at', null)
-        .order('fecha', { ascending: true })
-        .order('hora_inicio', { ascending: true })
+      const { data, error } = await fetchBlocks()
       if (error) throw error
       return data
     },
@@ -71,15 +69,9 @@ export default function BloqueoHorario() {
     queryKey: ['cirugias-validacion', formData.fecha, formData.operating_room_id],
     queryFn: async () => {
       if (!formData.fecha || !formData.operating_room_id) return []
-      const { data, error } = await supabase
-        .from('surgeries')
-        .select('hora_inicio, hora_fin')
-        .eq('fecha', formData.fecha)
-        .eq('operating_room_id', formData.operating_room_id)
-        .is('deleted_at', null)
-        .in('estado', ['programada', 'en_proceso'])
+      const { data, error } = await fetchSurgeriesForSlot(formData.fecha, formData.operating_room_id)
       if (error) throw error
-      return data || []
+      return data
     },
     enabled: !!formData.fecha && !!formData.operating_room_id,
   })
@@ -105,8 +97,7 @@ export default function BloqueoHorario() {
 
   const crearBloqueo = useMutation({
     mutationFn: async (data) => {
-      const { user } = await getCurrentUser()
-      const { error } = await supabase.from('schedule_blocks').insert({ ...data, created_by: user.id })
+      const { error } = await createBlock(data)
       if (error) throw error
     },
     onSuccess: () => {
@@ -126,7 +117,7 @@ export default function BloqueoHorario() {
 
   const actualizarBloqueo = useMutation({
     mutationFn: async ({ id, data }) => {
-      const { error } = await supabase.from('schedule_blocks').update(data).eq('id', id)
+      const { error } = await updateBlock(id, data)
       if (error) throw error
     },
     onSuccess: () => {
@@ -146,7 +137,7 @@ export default function BloqueoHorario() {
 
   const eliminarBloqueo = useMutation({
     mutationFn: async (id) => {
-      const { error } = await supabase.from('schedule_blocks').update({ deleted_at: new Date().toISOString() }).eq('id', id)
+      const { error } = await deleteBlock(id)
       if (error) throw error
     },
     onSuccess: () => {
@@ -229,7 +220,7 @@ export default function BloqueoHorario() {
 
   return (
     <div className="space-y-6">
-      <h1 className={isDark ? 'text-3xl font-bold text-white' : 'text-3xl font-bold text-gray-900'}>Bloqueo de Horario</h1>
+      <h1 className={`text-3xl font-bold ${t.textPrimary}`}>Bloqueo de Horario</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <BloqueoForm

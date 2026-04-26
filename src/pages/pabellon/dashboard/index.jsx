@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '@/config/supabase'
 import { getCurrentUser } from '@/services/authService'
+import { fetchDashboardOccupancy, fetchWeeklyUtilization, fetchAvgSurgeryDuration } from '@/services/operatingRoomService'
 import { format, subDays } from 'date-fns'
 import { Inbox, PhoneCall, Download } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
+import { tc } from '@/constants/theme'
 import { es } from 'date-fns/locale'
 import Modal from '@/components/common/Modal'
 // exportExcel se carga dinámicamente al hacer clic para no bloquear el bundle inicial
@@ -58,6 +59,7 @@ const STYLES = {
 export default function Dashboard() {
   const { theme } = useTheme()
   const navigate = useNavigate()
+  const t = tc(theme)
   const isDark = theme === 'dark'
 
   const [showCirugiasHoyModal, setShowCirugiasHoyModal] = useState(false)
@@ -158,23 +160,8 @@ export default function Dashboard() {
   const { data: ocupacion, isLoading: isLoadingOcupacion } = useQuery({
     queryKey: ['ocupacion-hoy', hoy],
     queryFn: async () => {
-      const [{ data: cirugias }, { data: bloqueos }, { data: pabellones }] = await Promise.all([
-        supabase.from('surgeries').select('operating_room_id').eq('fecha', hoy).is('deleted_at', null).in('estado', ['programada', 'en_proceso']),
-        supabase.from('schedule_blocks').select('operating_room_id').eq('fecha', hoy).is('deleted_at', null).or(`vigencia_hasta.is.null,vigencia_hasta.gte.${hoy}`),
-        supabase.from('operating_rooms').select('id').eq('activo', true).is('deleted_at', null),
-      ])
-      const totalPabellones = pabellones?.length || 0
-      const ids = new Set([
-        ...(cirugias?.map(c => c.operating_room_id) || []),
-        ...(bloqueos?.map(b => b.operating_room_id) || []),
-      ])
-      const pabellonesOcupados = ids.size
-      return {
-        totalPabellones,
-        pabellonesOcupados,
-        porcentajeOcupacion: totalPabellones > 0 ? Math.round((pabellonesOcupados / totalPabellones) * 100) : 0,
-        totalCirugias: cirugias?.length || 0,
-      }
+      const { data } = await fetchDashboardOccupancy(hoy)
+      return data
     },
   })
 
@@ -182,20 +169,8 @@ export default function Dashboard() {
     queryKey: ['tiempo-promedio-cirugia'],
     queryFn: async () => {
       const fechaInicio = format(subDays(new Date(), 30), 'yyyy-MM-dd')
-      const { data: cirugias, error } = await supabase
-        .from('surgeries')
-        .select('hora_inicio, hora_fin')
-        .gte('fecha', fechaInicio)
-        .is('deleted_at', null)
-        .in('estado', ['completada'])
-      if (error) throw error
-      if (!cirugias || cirugias.length === 0) return 0
-      const tiempos = cirugias.map(c => {
-        const inicio = new Date(`2000-01-01T${c.hora_inicio}`)
-        const fin = new Date(`2000-01-01T${c.hora_fin}`)
-        return (fin - inicio) / (1000 * 60)
-      })
-      return Math.round(tiempos.reduce((a, b) => a + b, 0) / tiempos.length)
+      const { data } = await fetchAvgSurgeryDuration(fechaInicio)
+      return data
     },
   })
 
@@ -204,24 +179,15 @@ export default function Dashboard() {
     queryFn: async () => {
       const fechaInicio = format(subDays(new Date(), 6), 'yyyy-MM-dd')
       const fechaFin = format(new Date(), 'yyyy-MM-dd')
-      const [{ data: cirugias }, { data: pabellones }] = await Promise.all([
-        supabase.from('surgeries').select('operating_room_id, fecha').gte('fecha', fechaInicio).lte('fecha', fechaFin).is('deleted_at', null).in('estado', ['programada', 'en_proceso', 'completada']),
-        supabase.from('operating_rooms').select('id').eq('activo', true).is('deleted_at', null),
-      ])
-      const totalPabellones = pabellones?.length || 0
-      const slotsTotales = totalPabellones * 7 * 12
-      const slotsOcupados = new Set(cirugias?.map(c => `${c.operating_room_id}-${c.fecha}`) || []).size
-      return {
-        porcentaje: slotsTotales > 0 ? Math.round((slotsOcupados / slotsTotales) * 100) : 0,
-        slotsOcupados,
-        slotsTotales,
-      }
+      const { data } = await fetchWeeklyUtilization(fechaInicio, fechaFin)
+      return data
     },
   })
 
   const isLoading = isLoadingOcupacion || isLoadingSolicitudes
 
-  const headerBtnClass = isDark ? STYLES.headerBtnDark : theme === 'medical' ? STYLES.headerBtnMedical : STYLES.headerBtnLight
+  const themeKey = isDark ? 'Dark' : theme === 'medical' ? 'Medical' : 'Light'
+  const headerBtnClass = STYLES[`headerBtn${themeKey}`]
 
   return (
     <div className={STYLES.page}>

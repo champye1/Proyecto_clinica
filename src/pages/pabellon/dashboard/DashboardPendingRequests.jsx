@@ -2,6 +2,7 @@ import { ArrowRight, ClipboardList } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Card from '@/components/common/Card'
 import { useTheme } from '@/contexts/ThemeContext'
+import { tc } from '@/constants/theme'
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
 const STYLES = {
@@ -39,9 +40,10 @@ const STYLES = {
 export default function DashboardPendingRequests({ solicitudes = [], isLoading = false }) {
   const { theme } = useTheme()
   const navigate = useNavigate()
+  const t = tc(theme)
   const isDark = theme === 'dark'
-
-  const itemThemeClass = isDark ? STYLES.itemDark : theme === 'medical' ? STYLES.itemMedical : STYLES.itemLight
+  const themeKey = isDark ? 'Dark' : theme === 'medical' ? 'Medical' : 'Light'
+  const itemThemeClass = STYLES[`item${themeKey}`]
 
   return (
     <Card className="lg:col-span-2 flex flex-col">
