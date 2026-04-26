@@ -5,10 +5,21 @@ import { ExpirationPlugin } from 'workbox-expiration'
 import { CacheableResponsePlugin } from 'workbox-cacheable-response'
 import { clientsClaim } from 'workbox-core'
 
-self.skipWaiting()
-clientsClaim()
-
 cleanupOutdatedCaches()
+
+// Cuando el SW toma control tras un deploy nuevo, recarga todos los clientes
+// abiertos para que usen los nuevos chunks en vez de los cacheados viejos.
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    self.clients.claim().then(() => {
+      return self.clients.matchAll({ type: 'window' }).then((clients) => {
+        clients.forEach((client) => client.navigate(client.url))
+      })
+    })
+  )
+})
+
+self.skipWaiting()
 
 // VitePWA inyecta el manifest aquí en el build
 precacheAndRoute(self.__WB_MANIFEST)

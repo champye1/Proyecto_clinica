@@ -9,6 +9,12 @@ import ErrorBoundary from './components/common/ErrorBoundary'
 import App from './App.jsx'
 import './index.css'
 
+// Cuando un chunk lazy-loaded falla (Service Worker desactualizado tras deploy),
+// forzar un hard reload para que el navegador obtenga la versión nueva.
+window.addEventListener('vite:preloadError', () => {
+  window.location.reload()
+})
+
 // Inicializar Sentry solo en producción o si hay DSN configurado
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
