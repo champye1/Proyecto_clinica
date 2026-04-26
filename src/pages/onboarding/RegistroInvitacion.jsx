@@ -7,6 +7,7 @@ import {
   checkInvitationCode,
 } from '@/services/onboardingService'
 import { sanitizeString } from '@/utils/sanitizeInput'
+import { validatePasswordStrength, getPasswordStrengthLabel } from '@/utils/passwordStrength'
 import { ESPECIALIDADES_CHILE } from '@/constants/especialidades'
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
@@ -81,6 +82,7 @@ export default function RegistroInvitacion() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [aceptaTerminos, setAceptaTerminos] = useState(false)
 
   useEffect(() => {
     const codigoUrl = searchParams.get('codigo')
@@ -110,8 +112,10 @@ export default function RegistroInvitacion() {
     e.preventDefault()
     setError(null)
 
+    if (!aceptaTerminos)                                 { setError('Debes aceptar la Política de Privacidad para continuar.'); return }
     if (form.password !== form.confirmPassword)         { setError('Las contraseñas no coinciden.'); return }
-    if (form.password.length < 8)                       { setError('La contraseña debe tener al menos 8 caracteres.'); return }
+    const { isValid: pwOk, errors: pwErrors } = validatePasswordStrength(form.password)
+    if (!pwOk)                                          { setError(`Contraseña insegura: ${pwErrors.join(', ')}.`); return }
     if (!form.nombre.trim() || !form.apellido.trim())   { setError('Nombre y apellido son obligatorios.'); return }
     if (invitacion.rol === 'doctor' && !form.especialidad) { setError('Selecciona tu especialidad.'); return }
 
@@ -347,7 +351,7 @@ export default function RegistroInvitacion() {
                   <input
                     id="inv-password" name="password" type={showPassword ? 'text' : 'password'} required
                     value={form.password} onChange={handleChange}
-                    placeholder="Mínimo 8 caracteres"
+                    placeholder="Mín. 12 · mayúscula · número · especial"
                     className={STYLES.inputWithBtn}
                   />
                   <button
@@ -372,11 +376,42 @@ export default function RegistroInvitacion() {
                 </div>
               </div>
 
+              {form.password && (() => {
+                const { score, errors: pwErrors } = validatePasswordStrength(form.password)
+                const { label, color } = getPasswordStrengthLabel(score)
+                return (
+                  <div className="space-y-1">
+                    <div className="flex gap-1">
+                      {[1,2,3,4].map(i => (
+                        <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${i <= score ? color : 'bg-slate-200'}`} />
+                      ))}
+                    </div>
+                    <p className="text-xs text-slate-400">{label}{pwErrors.length > 0 ? ` — falta: ${pwErrors.join(', ')}` : ''}</p>
+                  </div>
+                )
+              })()}
+
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={aceptaTerminos}
+                  onChange={e => setAceptaTerminos(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                />
+                <span className="text-xs text-slate-500">
+                  He leído y acepto la{' '}
+                  <a href="/privacidad" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium">
+                    Política de Privacidad
+                  </a>
+                  {' '}y el tratamiento de mis datos personales conforme a la Ley 21.719.
+                </span>
+              </label>
+
               <div className={STYLES.actionsRow}>
                 <button type="button" onClick={() => setPaso('codigo')} className={STYLES.backBtn}>
                   ← Atrás
                 </button>
-                <button type="submit" disabled={loading} className={STYLES.submitBtn}>
+                <button type="submit" disabled={loading || !aceptaTerminos} className={STYLES.submitBtn}>
                   {loading ? 'Creando cuenta...' : 'Activar cuenta'}
                 </button>
               </div>

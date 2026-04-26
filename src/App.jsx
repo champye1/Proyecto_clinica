@@ -21,6 +21,8 @@ const RecuperarContraseña = lazy(() => import('./pages/auth/RecuperarContraseñ
 const RestablecerContraseña = lazy(() => import('./pages/auth/RestablecerContraseña'))
 const SetupAdmin          = lazy(() => import('./pages/auth/SetupAdmin'))
 const ContactoExterno     = lazy(() => import('./pages/public/ContactoExterno'))
+const Privacidad          = lazy(() => import('./pages/public/Privacidad'))
+const MFAVerificacion     = lazy(() => import('./pages/auth/MFAVerificacion'))
 const PabellonLayout      = lazy(() => import('./layouts/PabellonLayout'))
 const DoctorLayout        = lazy(() => import('./layouts/DoctorLayout'))
 const AdminLayout         = lazy(() => import('./layouts/AdminLayout'))
@@ -194,6 +196,8 @@ function AppContent() {
         <Route path="/recuperar-contrasena" element={<RecuperarContraseña />} />
         <Route path="/restablecer-contrasena" element={<RestablecerContraseña />} />
         <Route path="/contacto" element={<ContactoExterno />} />
+        <Route path="/privacidad" element={<Privacidad />} />
+        <Route path="/mfa/verificar" element={<MFAVerificacion />} />
         <Route path="/setup-admin" element={<SetupAdmin />} />
 
         {/* Onboarding — accesible sin rol asignado aún */}

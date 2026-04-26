@@ -12,6 +12,7 @@ import { useTheme } from '@/contexts/ThemeContext'
 import { tc } from '@/constants/theme'
 import Button from '@/components/common/Button'
 import Modal from '@/components/common/Modal'
+import MFASetup from '@/components/common/MFASetup'
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
 const STYLES = {
@@ -405,6 +406,14 @@ export default function Configuracion() {
       </section>
 
       {/* Modal crear / editar sala */}
+      {/* ── Seguridad de la cuenta ── */}
+      <section>
+        <div className={`${STYLES.sectionHeader} mb-3`}>
+          <h2 className={`${STYLES.sectionTitle} ${title}`}>Seguridad</h2>
+        </div>
+        <MFASetup />
+      </section>
+
       <Modal
         isOpen={showModal}
         onClose={() => setShowModal(false)}

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Lock, Stethoscope, ArrowLeft, Eye, EyeOff } from 'lucide-react'
+import { Lock, Stethoscope, ArrowLeft, Eye, EyeOff, CheckCircle2, XCircle } from 'lucide-react'
 import { sanitizePassword } from '@/utils/sanitizeInput'
+import { validatePasswordStrength, getPasswordStrengthLabel } from '@/utils/passwordStrength'
 import { getCurrentSession, updatePassword, signOut } from '@/services/authService'
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
@@ -65,8 +66,9 @@ export default function RestablecerContraseña() {
       setError('Las contraseñas no coinciden.')
       return
     }
-    if (password.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres.')
+    const { isValid, errors } = validatePasswordStrength(password)
+    if (!isValid) {
+      setError(`Contraseña insegura: ${errors.join(', ')}.`)
       return
     }
     setLoading(true)
@@ -135,7 +137,7 @@ export default function RestablecerContraseña() {
         <div className={STYLES.headerSection}>
           <h1 className={`${STYLES.title} mb-0`}>Nueva contraseña</h1>
           <p className={STYLES.headerNote}>
-            Elige una contraseña segura (mín. 6 caracteres)
+            Mín. 12 caracteres · mayúscula · número · carácter especial
           </p>
         </div>
 
@@ -152,8 +154,8 @@ export default function RestablecerContraseña() {
                 value={password}
                 onChange={(e) => setPassword(sanitizePassword(e.target.value))}
                 className={STYLES.inputWithBtn}
-                placeholder="••••••••"
-                minLength={6}
+                placeholder="Mín. 12 caracteres"
+                minLength={12}
                 disabled={loading}
                 autoComplete="new-password"
               />
@@ -169,6 +171,21 @@ export default function RestablecerContraseña() {
             </div>
           </div>
 
+          {password && (() => {
+            const { score, errors } = validatePasswordStrength(password)
+            const { label, color } = getPasswordStrengthLabel(score)
+            return (
+              <div className="space-y-1.5">
+                <div className="flex gap-1">
+                  {[1,2,3,4].map(i => (
+                    <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${i <= score ? color : 'bg-slate-200'}`} />
+                  ))}
+                </div>
+                <p className="text-xs text-slate-500">{label}{errors.length > 0 ? ` — falta: ${errors.join(', ')}` : ''}</p>
+              </div>
+            )
+          })()}
+
           <div>
             <label htmlFor="confirm" className={STYLES.label}>Repetir contraseña</label>
             <div className={STYLES.inputWrap}>
@@ -180,7 +197,7 @@ export default function RestablecerContraseña() {
                 onChange={(e) => setConfirmPassword(sanitizePassword(e.target.value))}
                 className={STYLES.input}
                 placeholder="••••••••"
-                minLength={6}
+                minLength={12}
                 disabled={loading}
                 autoComplete="new-password"
               />

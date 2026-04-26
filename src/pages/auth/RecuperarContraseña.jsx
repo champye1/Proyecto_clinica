@@ -4,6 +4,32 @@ import { Mail, Stethoscope, ArrowLeft } from 'lucide-react'
 import { sanitizeEmail } from '@/utils/sanitizeInput'
 import { resolveUsernameToEmail, sendPasswordResetEmail } from '@/services/authService'
 
+const RESET_KEY = 'pwd_reset_attempts'
+const RESET_MAX = 3
+const RESET_WINDOW = 60 * 60 * 1000 // 1 hora
+
+function checkResetLimit(identifier) {
+  const key = `${RESET_KEY}_${identifier.toLowerCase()}`
+  const stored = localStorage.getItem(key)
+  if (!stored) return { allowed: true, remainingMs: 0 }
+  const { count, windowStart } = JSON.parse(stored)
+  const elapsed = Date.now() - windowStart
+  if (elapsed > RESET_WINDOW) { localStorage.removeItem(key); return { allowed: true, remainingMs: 0 } }
+  if (count >= RESET_MAX) return { allowed: false, remainingMs: RESET_WINDOW - elapsed }
+  return { allowed: true, remainingMs: 0 }
+}
+
+function recordResetAttempt(identifier) {
+  const key = `${RESET_KEY}_${identifier.toLowerCase()}`
+  const stored = localStorage.getItem(key)
+  const now = Date.now()
+  if (!stored) { localStorage.setItem(key, JSON.stringify({ count: 1, windowStart: now })); return }
+  const data = JSON.parse(stored)
+  const elapsed = now - data.windowStart
+  if (elapsed > RESET_WINDOW) { localStorage.setItem(key, JSON.stringify({ count: 1, windowStart: now })); return }
+  localStorage.setItem(key, JSON.stringify({ count: data.count + 1, windowStart: data.windowStart }))
+}
+
 // ─── Estilos ──────────────────────────────────────────────────────────────────
 const STYLES = {
   page:       'min-h-screen flex items-center justify-center bg-slate-50 p-4 sm:p-6',
@@ -49,6 +75,13 @@ export default function RecuperarContraseña() {
         return
       }
 
+      const { allowed, remainingMs } = checkResetLimit(emailToUse)
+      if (!allowed) {
+        const mins = Math.ceil(remainingMs / 60000)
+        setError(`Demasiados intentos. Espera ${mins} minuto${mins !== 1 ? 's' : ''} antes de solicitar otro enlace.`)
+        return
+      }
+
       if (!emailToUse.includes('@')) {
         const { email: resolved, error: rpcError } = await resolveUsernameToEmail(emailToUse)
         if (rpcError || !resolved) {
@@ -58,6 +91,7 @@ export default function RecuperarContraseña() {
         emailToUse = resolved
       }
 
+      recordResetAttempt(emailToUse)
       const { error: resetError } = await sendPasswordResetEmail(emailToUse)
       if (resetError) {
         setError(resetError.message || 'Error al enviar el correo. Intenta de nuevo.')

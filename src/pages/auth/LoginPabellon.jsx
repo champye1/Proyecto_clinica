@@ -9,6 +9,7 @@ import {
   formatRemainingTime,
 } from '@/utils/rateLimiter'
 import { signIn, verifyUserExists, signOut } from '@/services/authService'
+import { getAssuranceLevel } from '@/services/mfaService'
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
 const STYLES = {
@@ -114,6 +115,15 @@ export default function LoginPabellon() {
         throw new Error('Este acceso es solo para usuarios de Pabellón')
       }
 
+      // Verificar si el usuario tiene MFA inscrito
+      const { data: aal } = await getAssuranceLevel()
+      if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
+        const dest = userData.role === 'super_admin' ? '/admin' : '/pabellon'
+        sessionStorage.setItem('mfa_redirect', dest)
+        navigate('/mfa/verificar', { replace: true })
+        return
+      }
+
       if (userData.role === 'super_admin') {
         await new Promise(resolve => setTimeout(resolve, 100))
         navigate('/admin', { replace: true })
@@ -204,6 +214,13 @@ export default function LoginPabellon() {
             {loading ? 'Iniciando sesión...' : lockoutInfo?.isLocked ? 'Cuenta Bloqueada' : 'Entrar al Sistema'}
           </button>
         </form>
+
+        <p className="mt-6 text-center text-[10px] text-slate-400">
+          Al iniciar sesión aceptas nuestra{' '}
+          <a href="/privacidad" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-600">
+            Política de Privacidad
+          </a>
+        </p>
       </div>
     </div>
   )

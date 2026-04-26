@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { Building2, Mail, Lock, MapPin, Eye, EyeOff, ArrowRight, CheckCircle2, MailCheck } from 'lucide-react'
 import { signUpClinica, registerClinica, resendConfirmation } from '@/services/onboardingService'
 import { sanitizeEmail, sanitizeString } from '@/utils/sanitizeInput'
+import { validatePasswordStrength, getPasswordStrengthLabel } from '@/utils/passwordStrength'
 
 // ─── Datos ────────────────────────────────────────────────────────────────────
 const BENEFICIOS = [
@@ -79,6 +80,7 @@ export default function Registro() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [emailEnviado, setEmailEnviado] = useState(false)
+  const [aceptaTerminos, setAceptaTerminos] = useState(false)
 
   const handleChange = (e) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
@@ -89,12 +91,17 @@ export default function Registro() {
     e.preventDefault()
     setError(null)
 
+    if (!aceptaTerminos) {
+      setError('Debes aceptar la Política de Privacidad para continuar.')
+      return
+    }
     if (form.password !== form.confirmPassword) {
       setError('Las contraseñas no coinciden.')
       return
     }
-    if (form.password.length < 8) {
-      setError('La contraseña debe tener al menos 8 caracteres.')
+    const { isValid, errors: pwErrors } = validatePasswordStrength(form.password)
+    if (!isValid) {
+      setError(`Contraseña insegura: ${pwErrors.join(', ')}.`)
       return
     }
 
@@ -278,7 +285,7 @@ export default function Registro() {
                   id="password" name="password"
                   type={showPassword ? 'text' : 'password'}
                   required value={form.password} onChange={handleChange}
-                  placeholder="Mínimo 8 caracteres"
+                  placeholder="Mín. 12 caracteres · mayúscula · número · especial"
                   className={STYLES.inputWithBtn}
                 />
                 <button
@@ -306,13 +313,44 @@ export default function Registro() {
               </div>
             </div>
 
+            {form.password && (() => {
+              const { score, errors: pwErrors } = validatePasswordStrength(form.password)
+              const { label, color } = getPasswordStrengthLabel(score)
+              return (
+                <div className="space-y-1">
+                  <div className="flex gap-1">
+                    {[1,2,3,4].map(i => (
+                      <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${i <= score ? color : 'bg-slate-200'}`} />
+                    ))}
+                  </div>
+                  <p className="text-xs text-slate-400">{label}{pwErrors.length > 0 ? ` — falta: ${pwErrors.join(', ')}` : ''}</p>
+                </div>
+              )
+            })()}
+
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={aceptaTerminos}
+                onChange={e => setAceptaTerminos(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 shrink-0"
+              />
+              <span className="text-xs text-slate-500">
+                He leído y acepto la{' '}
+                <a href="/privacidad" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium">
+                  Política de Privacidad
+                </a>
+                {' '}y el tratamiento de mis datos personales conforme a la Ley 21.719.
+              </span>
+            </label>
+
             {error && (
               <div className={STYLES.errorBox}>
                 <span>{error}</span>
               </div>
             )}
 
-            <button type="submit" disabled={loading} className={STYLES.submitBtn}>
+            <button type="submit" disabled={loading || !aceptaTerminos} className={STYLES.submitBtn}>
               {loading
                 ? <span className={STYLES.spinner} />
                 : <><span>Crear cuenta y continuar</span><ArrowRight className={STYLES.arrowIcon} /></>

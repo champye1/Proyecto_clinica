@@ -15,6 +15,7 @@ const CrearPaciente      = lazy(() => import('@/pages/doctor/CrearPaciente'))
 const Solicitudes        = lazy(() => import('@/pages/doctor/Solicitudes'))
 const Calendario         = lazy(() => import('@/pages/doctor/Calendario'))
 const HorariosDisponibles = lazy(() => import('@/pages/doctor/HorariosDisponibles'))
+const Seguridad           = lazy(() => import('@/pages/doctor/Seguridad'))
 import { useRealtimeNotifications } from '@/hooks/useRealtimeNotifications'
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
 import { useNotificationsList } from '@/hooks/useNotificationsList'
@@ -27,6 +28,7 @@ const menuItems = [
   { path: '/doctor/solicitudes', icon: FileText, label: 'Mis Solicitudes' },
   { path: '/doctor/horarios', icon: LayoutGrid, label: 'Horarios pabellones' },
   { path: '/doctor/calendario', icon: Calendar, label: 'Mi Calendario' },
+  { path: '/doctor/seguridad', icon: Settings, label: 'Seguridad' },
 ]
 
 // ─── Estilos por tema ─────────────────────────────────────────────────────────
@@ -402,6 +404,7 @@ export default function DoctorLayout() {
               <Route path="/solicitudes" element={<Solicitudes />} />
               <Route path="/horarios" element={<HorariosDisponibles />} />
               <Route path="/calendario" element={<Calendario />} />
+              <Route path="/seguridad" element={<Seguridad />} />
               <Route path="*" element={<Navigate to="/doctor" />} />
             </Routes>
           </Suspense>
