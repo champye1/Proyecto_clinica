@@ -207,6 +207,10 @@ BEGIN
   -- ── Solicitudes ────────────────────────────────────────────
   -- surgery_request_id es UNIQUE en surgeries → necesitamos una solicitud por cirugía
   -- 12 aceptadas (para las 12 cirugías) + 3 pendientes + 1 rechazada
+  -- El trigger validar_doctor_activo requiere que el doctor exista con estado='activo';
+  -- como estamos en el mismo bloque DO, lo deshabilitamos para evitar race conditions.
+  ALTER TABLE surgery_requests DISABLE TRIGGER USER;
+
   INSERT INTO surgery_requests (id, doctor_id, patient_id, clinica_id, codigo_operacion, estado, created_at)
   VALUES
     -- aceptadas → tendrán cirugía
@@ -229,6 +233,8 @@ BEGIN
     -- rechazada
     (v_sreq16_id, v_doc1_id, v_pat6_id, v_clinica_id, 'P1201', 'rechazada', NOW() - INTERVAL '2 days')
   ON CONFLICT DO NOTHING;
+
+  ALTER TABLE surgery_requests ENABLE TRIGGER USER;
 
   -- ── Cirugías ───────────────────────────────────────────────
   -- El schema tiene CONSTRAINT fecha_futura CHECK (fecha >= CURRENT_DATE).
