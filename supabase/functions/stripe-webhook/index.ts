@@ -96,7 +96,7 @@ serve(async (req) => {
         break
       }
 
-      // ── Pago fallido → notificar sin suspender de inmediato ─────
+      // ── Pago fallido → notificar al admin de la clínica ────────
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice
         const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id
@@ -110,7 +110,25 @@ serve(async (req) => {
 
           if (clinica) {
             console.warn('stripe-webhook: pago fallido para clínica', clinica.id, clinica.nombre)
-            // Aquí podrías insertar una notificación o enviar un email de alerta
+
+            // Buscar el admin de la clínica para enviarle la notificación
+            const { data: adminUser } = await supabase
+              .from('users')
+              .select('id')
+              .eq('clinica_id', clinica.id)
+              .eq('role', 'pabellon_admin')
+              .limit(1)
+              .maybeSingle()
+
+            if (adminUser) {
+              await supabase.from('notifications').insert({
+                user_id:    adminUser.id,
+                titulo:     '⚠️ Problema con tu pago',
+                mensaje:    `No pudimos procesar el pago de tu suscripción en ${clinica.nombre}. Actualiza tu método de pago en la sección Facturación para evitar la suspensión del servicio.`,
+                tipo:       'advertencia',
+                vista:      false,
+              })
+            }
           }
         }
         break

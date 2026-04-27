@@ -13,6 +13,8 @@ import { tc } from '@/constants/theme'
 import Button from '@/components/common/Button'
 import Modal from '@/components/common/Modal'
 import MFASetup from '@/components/common/MFASetup'
+import CambiarContrasena from '@/components/common/CambiarContrasena'
+import PerfilUsuario from '@/components/common/PerfilUsuario'
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
 const STYLES = {
@@ -188,6 +190,12 @@ export default function Configuracion() {
         <h1 className={`${STYLES.pageTitle} ${title}`}>Configuración</h1>
         <p className={`${STYLES.pageSubtitle} ${label}`}>Administra tu clínica, salas y plan.</p>
       </div>
+
+      {/* ── Perfil personal ── */}
+      <PerfilUsuario />
+
+      {/* ── Cambiar contraseña ── */}
+      <CambiarContrasena />
 
       {/* ── Información de la clínica ── */}
       <section className={`${STYLES.section} ${card}`}>

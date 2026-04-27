@@ -2,6 +2,8 @@ import { ShieldCheck } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
 import { tc } from '@/constants/theme'
 import MFASetup from '@/components/common/MFASetup'
+import CambiarContrasena from '@/components/common/CambiarContrasena'
+import PerfilUsuario from '@/components/common/PerfilUsuario'
 
 export default function Seguridad() {
   const { theme } = useTheme()
@@ -10,12 +12,15 @@ export default function Seguridad() {
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
         <h1 className={`text-2xl font-black uppercase tracking-tighter ${t.textPrimary}`}>
-          Seguridad
+          Mi Cuenta
         </h1>
         <p className={`text-sm mt-1 ${t.textSecondary}`}>
-          Configuración de seguridad de tu cuenta médica.
+          Perfil, contraseña y seguridad de tu cuenta médica.
         </p>
       </div>
+
+      <PerfilUsuario />
+      <CambiarContrasena />
       <MFASetup />
     </div>
   )
