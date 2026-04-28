@@ -42,7 +42,29 @@ import {
   verifyChallenge,
   unenrollFactor,
   challengeAndVerify,
+  generateBackupCodes,
+  verifyBackupCode,
+  countRemainingBackupCodes,
 } from '../mfaService'
+
+beforeEach(() => { vi.clearAllMocks() })
+
+// Helper: devuelve un objeto chainable de Supabase cuyo resultado final es `result`.
+// Las llamadas intermedias (.eq, .is, .select, .update, .delete) devuelven el mismo
+// chain; .insert/.maybeSingle/.single resuelven la promesa con `result`.
+// El chain también es thenable para soportar `await chain.delete().eq(...)`.
+function makeChain(result) {
+  const chain = {}
+  ;['delete', 'select', 'update', 'eq', 'is', 'limit', 'neq', 'lt'].forEach(
+    m => { chain[m] = () => chain },
+  )
+  chain.insert      = () => Promise.resolve(result)
+  chain.maybeSingle = () => Promise.resolve(result)
+  chain.single      = () => Promise.resolve(result)
+  chain.then        = (res, rej) => Promise.resolve(result).then(res, rej)
+  chain.catch       = rej => Promise.resolve(result).catch(rej)
+  return chain
+}
 
 // ─── getAssuranceLevel ────────────────────────────────────────────────────────
 describe('getAssuranceLevel', () => {
@@ -130,5 +152,88 @@ describe('unenrollFactor', () => {
     const { error } = await unenrollFactor('factor-1')
     expect(mockMfaUnenroll).toHaveBeenCalledWith({ factorId: 'factor-1' })
     expect(error).toBeNull()
+  })
+})
+
+// ─── generateBackupCodes ──────────────────────────────────────────────────────
+describe('generateBackupCodes', () => {
+  beforeEach(() => {
+    mockDigest.mockResolvedValue(new Uint8Array(32).fill(1).buffer)
+  })
+
+  it('genera 8 códigos en formato XXXX-XXXX-XXXX-XXXX', async () => {
+    mockFrom
+      .mockReturnValueOnce(makeChain({ error: null }))  // delete anterior
+      .mockReturnValueOnce(makeChain({ error: null }))  // insert nuevos
+    const { codes, error } = await generateBackupCodes('user-123')
+    expect(codes).toHaveLength(8)
+    expect(error).toBeNull()
+    codes.forEach(c =>
+      expect(c).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/)
+    )
+  })
+
+  it('retorna error si el insert falla', async () => {
+    mockFrom
+      .mockReturnValueOnce(makeChain({ error: null }))
+      .mockReturnValueOnce(makeChain({ error: new Error('DB insert error') }))
+    const { codes, error } = await generateBackupCodes('user-123')
+    expect(codes).toBeNull()
+    expect(error).toBeTruthy()
+  })
+})
+
+// ─── verifyBackupCode ─────────────────────────────────────────────────────────
+describe('verifyBackupCode', () => {
+  beforeEach(() => {
+    mockDigest.mockResolvedValue(new Uint8Array(32).fill(1).buffer)
+  })
+
+  it('retorna valid:true y marca el código como usado', async () => {
+    mockFrom
+      .mockReturnValueOnce(makeChain({ data: { id: 'code-1' }, error: null }))  // select
+      .mockReturnValueOnce(makeChain({ error: null }))                           // update used_at
+    const { valid, error } = await verifyBackupCode('user-123', 'AAAA-BBBB-CCCC-DDDD')
+    expect(valid).toBe(true)
+    expect(error).toBeNull()
+  })
+
+  it('retorna valid:false si el código no existe o ya fue usado', async () => {
+    mockFrom.mockReturnValueOnce(makeChain({ data: null, error: null }))
+    const { valid, error } = await verifyBackupCode('user-123', 'XXXX-XXXX-XXXX-XXXX')
+    expect(valid).toBe(false)
+    expect(error).toBeTruthy()
+  })
+
+  it('retorna valid:false si el select devuelve error de DB', async () => {
+    mockFrom.mockReturnValueOnce(makeChain({ data: null, error: new Error('DB error') }))
+    const { valid, error } = await verifyBackupCode('user-123', 'AAAA-BBBB-CCCC-DDDD')
+    expect(valid).toBe(false)
+    expect(error).toBeTruthy()
+  })
+
+  it('retorna valid:false si el update falla', async () => {
+    mockFrom
+      .mockReturnValueOnce(makeChain({ data: { id: 'code-1' }, error: null }))
+      .mockReturnValueOnce(makeChain({ error: new Error('Update failed') }))
+    const { valid, error } = await verifyBackupCode('user-123', 'AAAA-BBBB-CCCC-DDDD')
+    expect(valid).toBe(false)
+    expect(error).toBeTruthy()
+  })
+})
+
+// ─── countRemainingBackupCodes ────────────────────────────────────────────────
+describe('countRemainingBackupCodes', () => {
+  it('retorna el conteo de códigos sin usar', async () => {
+    mockFrom.mockReturnValueOnce(makeChain({ count: 6, error: null }))
+    const { count, error } = await countRemainingBackupCodes('user-123')
+    expect(count).toBe(6)
+    expect(error).toBeNull()
+  })
+
+  it('retorna 0 si no hay códigos disponibles', async () => {
+    mockFrom.mockReturnValueOnce(makeChain({ count: null, error: null }))
+    const { count } = await countRemainingBackupCodes('user-123')
+    expect(count).toBe(0)
   })
 })

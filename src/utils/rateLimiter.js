@@ -87,12 +87,12 @@ export function clearLoginAttempts(identifier) {
  * Limpia todos los intentos de login (útil al cerrar sesión)
  */
 export function clearAllLoginAttempts() {
-  const keys = Object.keys(localStorage)
-  keys.forEach(key => {
-    if (key.startsWith(STORAGE_KEY_PREFIX)) {
-      localStorage.removeItem(key)
-    }
-  })
+  const keysToRemove = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (key && key.startsWith(STORAGE_KEY_PREFIX)) keysToRemove.push(key)
+  }
+  keysToRemove.forEach(key => localStorage.removeItem(key))
 }
 
 /**

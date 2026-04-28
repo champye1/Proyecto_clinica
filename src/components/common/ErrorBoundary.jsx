@@ -1,7 +1,12 @@
 import { Component } from 'react'
 import { AlertTriangle } from 'lucide-react'
-import * as Sentry from '@sentry/react'
 import { logger } from '@/utils/logger'
+
+// Se asigna solo cuando el DSN está configurado y el import dinámico resuelve.
+let _sentryCapture = null
+if (import.meta.env.VITE_SENTRY_DSN) {
+  import('@sentry/react').then(S => { _sentryCapture = S.captureException })
+}
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
 const STYLES = {
@@ -37,9 +42,8 @@ class ErrorBoundary extends Component {
 
     this.setState({ error, errorInfo })
 
-    // Reportar a Sentry si está configurado
-    if (import.meta.env.VITE_SENTRY_DSN) {
-      const eventId = Sentry.captureException(error, {
+    if (_sentryCapture) {
+      const eventId = _sentryCapture(error, {
         contexts: { react: { componentStack: errorInfo.componentStack } },
       })
       this.setState({ eventId })

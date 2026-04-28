@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Mail, Lock, AlertCircle, Building2, ArrowLeft } from 'lucide-react'
+import { Mail, Lock, AlertCircle, Building2, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import { sanitizeEmail, sanitizePassword } from '@/utils/sanitizeInput'
 import {
   isLocked,
@@ -22,6 +22,9 @@ const STYLES = {
   label:      'text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1',
   inputIcon:  'absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4 sm:w-[18px] sm:h-[18px]',
   input:      'w-full bg-slate-50 border-2 border-slate-50 rounded-xl sm:rounded-2xl py-3 sm:py-4 pl-10 sm:pl-12 pr-3 sm:pr-4 focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-sm sm:text-base text-slate-700 touch-manipulation',
+  inputWithBtn:'w-full bg-slate-50 border-2 border-slate-50 rounded-xl sm:rounded-2xl py-3 sm:py-4 pl-10 sm:pl-12 pr-11 sm:pr-12 focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-sm sm:text-base text-slate-700 touch-manipulation',
+  toggleBtn:  'absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 transition-colors',
+  eyeIcon:    'w-5 h-5',
   alertBox:   'px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl flex items-center gap-2 animate-in fade-in duration-300',
   lockoutBox: 'bg-orange-50 border-2 border-orange-200 text-orange-700',
   errorBox:   'bg-red-50 border-2 border-red-200 text-red-700',
@@ -43,6 +46,7 @@ export default function LoginPabellon() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [lockoutInfo, setLockoutInfo] = useState(null)
+  const [showPassword, setShowPassword] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -195,12 +199,23 @@ export default function LoginPabellon() {
             <div className={STYLES.inputWrap}>
               <Lock className={STYLES.inputIcon} aria-hidden="true" />
               <input
-                id="password" type="password" value={password}
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
                 onChange={(e) => setPassword(sanitizePassword(e.target.value))}
-                className={STYLES.input}
+                className={STYLES.inputWithBtn}
                 placeholder="••••••••"
                 required disabled={loading} autoComplete="current-password"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className={STYLES.toggleBtn}
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className={STYLES.eyeIcon} /> : <Eye className={STYLES.eyeIcon} />}
+              </button>
             </div>
           </div>
 
