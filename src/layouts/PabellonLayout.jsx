@@ -35,10 +35,7 @@ import Modal from '@/components/common/Modal'
 // ─── Datos ────────────────────────────────────────────────────────────────────
 const menuItems = [
   { path: '/pabellon', icon: Home, label: 'Inicio' },
-  { path: '/pabellon/solicitudes', icon: FileText, label: 'Solicitudes' },
   { path: '/pabellon/calendario', icon: Calendar, label: 'Calendario' },
-  { path: '/pabellon/bloqueo', icon: Clock, label: 'Bloqueo Horario' },
-  { path: '/pabellon/medicos', icon: Users, label: 'Médicos' },
   { path: '/pabellon/equipo', icon: UserCog, label: 'Equipo' },
   { path: '/pabellon/insumos', icon: Package, label: 'Insumos' },
   { path: '/pabellon/correos', icon: Mail, label: 'Correos', badge: true },
